@@ -1,4 +1,8 @@
-#pip install beautifulsoup4
+#Created by VNXLab
+#Website: https://vnxlab.uk/
+#Python guide: https://vnxlab.uk/how-to-run-python-on-windows-10-11/
+
+# pip install BeautifulSoup
 
 import requests
 from bs4 import BeautifulSoup
