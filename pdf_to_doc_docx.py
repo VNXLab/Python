@@ -1,3 +1,9 @@
+#Created by VNXLab
+#Website: https://vnxlab.uk/
+#Python guide: https://vnxlab.uk/how-to-run-python-on-windows-10-11/
+
+# pip install pdf2docx
+
 from pdf2docx import Converter
 
 def pdf_to_docx(pdf_file, docx_file):
