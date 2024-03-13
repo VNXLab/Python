@@ -1,3 +1,11 @@
+# Created by VNXLab
+# Website: https://vnxlab.uk/
+# Python guide: https://vnxlab.uk/how-to-run-python-on-windows-10-11/
+# Tested on Windows 10
+# =================================
+# pip install shutil
+# pip install tkinter
+
 import os
 import shutil
 import tkinter as tk
