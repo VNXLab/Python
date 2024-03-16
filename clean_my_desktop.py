@@ -34,6 +34,7 @@ for file_name in os.listdir(desktop_path):
         _, file_extension = os.path.splitext(file_name)
         file_extension = file_extension.lower()
 
+        # Check file extension and move files to appropriate folders
         if file_extension in image_extensions:
             shutil.move(file_path, image_folder)
             print(f"Moved {file_name} to the images folder.")
@@ -46,4 +47,3 @@ for file_name in os.listdir(desktop_path):
         else:
             shutil.move(file_path, other_folder)
             print(f"Moved {file_name} to the others folder.")
-
