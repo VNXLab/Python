@@ -183,4 +183,21 @@ function CommandListener
     }
     $session.Dispose()
 }
+
+function ProcessCommand($command)
+{
+    $args = $command -split ' '
+    $action = $args[0]
+    $target = $args[1]
+
+    switch ($action) {
+        "process" {
+            ManageProcesses -action $target -processName $args[2]
+        }
+        default {
+            SendMessage "Unknown command: $command"
+        }
+    }
+}
+
 CommandListener
