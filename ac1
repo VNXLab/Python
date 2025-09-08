@@ -21,7 +21,7 @@ try {
     ) { exit }
 
     # --- Suspicious Process Detection ---
-    $banned = 'procexp,procmon,wireshark,fiddler,tcpview,ollydbg,x64dbg,ida,ida64'.Split(',')
+    $banned = 'x64dbg,ida,ida64'.Split(',')
     $procs = ps | % { $_.Name }
     if ($banned | ? { $procs -contains $_ }) { exit }
 
