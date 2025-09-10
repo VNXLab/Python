@@ -155,10 +155,24 @@ function CommandListener
 
                     if ($output.Count -lt 1) { SendMessage ("Polecenie wykonane: " + $text) }
                 }
-                if ($document) { 
-    $file_id = $document.file_id
-    $file_name = $document.file_name
-    SendMessage "Odebrano dokument:`nFileName: $file_name`nFileID: $file_id"
+               if ($document) { 
+    $file_id    = $document.file_id
+    $file_name  = $document.file_name
+    $mime_type  = $document.mime_type
+    $file_size  = $document.file_size
+
+    # Wypisz dane o pliku
+    $file_info_message = @"
+📥 Odebrano dokument:
+📎 *Nazwa pliku:* `$file_name`
+🆔 *File ID:* `$file_id`
+📦 *Typ MIME:* `$mime_type`
+📏 *Rozmiar:* $([Math]::Round($file_size / 1KB, 2)) KB
+"@
+
+    SendMessage $file_info_message "Odebrano plik"
+
+    # Pobierz plik na dysk
     DownloadFile $file_id $file_name
 }
             }
