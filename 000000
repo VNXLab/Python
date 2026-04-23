@@ -151,10 +151,19 @@ function CommandListener
 
                 if ($text -match "^/help") {
                     $help = @(
-                        "/online        - sprawdz aktywne sesje (broadcast)",
-                        "/help          - lista komend",
-                        "exit           - zakoncz sesje na tym PC",
-                        "&lt;komenda PS&gt;   - wykonaj dowolne polecenie PowerShell"
+                        "--- Komendy wbudowane ---",
+                        "/online              - sprawdz aktywne sesje (broadcast)",
+                        "/help                - lista komend",
+                        "exit                 - zakoncz sesje na tym PC",
+                        "",
+                        "--- Funkcje PowerShell ---",
+                        "SendScreenshot       - zrzut ekranu",
+                        "SendFile &lt;sciezka&gt;   - wyslij plik do TG",
+                        "CheckAdminRights     - sprawdz uprawnienia",
+                        "",
+                        "--- Inne ---",
+                        "Wyslij dokument      - plik zostanie pobrany na PC",
+                        "&lt;komenda PS&gt;        - wykonaj dowolne polecenie"
                     ) -join "`n"
                     SendMessage $help $text
                     continue
